@@ -43,10 +43,12 @@ src/core/             the facade rules: NO DOM, NO three.js
   facade.js           coordinates, bounds, mirror rule, variants, validation
   assemble.js         stacking stages into a building, party walls, combination count
   sample.js           the sample facade the editor opens with
+  nbt.js              NBT (Minecraft binary format) writer/reader, varints
+  schem.js            assembled building -> Sponge v3 .schem; pane connections
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
-tests/core.test.js    tests for src/core
+tests/                tests for src/core (one file per area)
 docs/concept.pdf      original concept document
 ```
 
@@ -91,6 +93,17 @@ ported to Java for the mod, and the part the tests cover.
   `minecraft:stone_brick_stairs[facing=north,half=top]`. Stair `facing` is the
   side the tall half is on.
 
+## Export
+
+- **.schem** is Sponge Schematic v3 (gzipped NBT), as WorldEdit 7.3+ reads it.
+  Download it from the Assembled building view.
+- Our axes match Minecraft: +x east, +y up, +z south. No rotation on export.
+- The **paste point** (where the player stands for `//paste`) is the bottom of
+  the Core Wall's centre column: x = 0, y = 0, z = 0.
+- Data version per game version is in `DATA_VERSIONS` (1.21.11 = 4671).
+- The editor stores bare glass panes; the exporter adds their north/south/east/west
+  connections. Other blocks are exported exactly as stored.
+
 ## Project file
 
 The editor saves the project in the browser (localStorage key
@@ -104,7 +117,7 @@ changes, bump `formatVersion` and keep loading older files.
 2. ✅ 3D viewer
 3. ✅ Stage editor (3D clicking + elevation grid, mirror, undo)
 4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
-5. ⬜ Export WorldEdit `.schem` (Sponge schematic, gzipped NBT). Then Litematica
+5. 🔶 Export: WorldEdit `.schem` built (awaiting in-game check). Next: Litematica
    `.litematic` and Axiom `.bp`.
 6. ⬜ Combination generator with bulk export ("all combinations" warns above a limit)
 7. ⬜ Corners: sharp, then chamfered, with the merge/trim rule
@@ -115,4 +128,5 @@ changes, bump `formatVersion` and keep loading older files.
 ## Known limits
 
 - Blocks are drawn as flat colours, not textures. Stair and pane shapes are simplified.
-- Downloads aren't built yet; the project travels as copied JSON.
+- Stair shapes (inner/outer corners) are not worked out on export; stairs export
+  as straight unless the stored state says otherwise.

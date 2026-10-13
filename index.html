@@ -28,10 +28,11 @@
   <section class="drawer" id="drawer" hidden>
     <div class="sec" style="padding:0;border:0">
       <h2>Project file</h2>
-      <p class="lbl" style="margin:0">Your work saves in this browser automatically. To keep a copy elsewhere, copy the project JSON and save it in a text file. Load it back by pasting it here or choosing the file.</p>
+      <p class="lbl" style="margin:0">Your work saves in this browser automatically. To keep a copy elsewhere, download it as a .json file (or copy the JSON). Load it back by pasting it here or choosing the file.</p>
       <textarea id="projText" rows="5" spellcheck="false" placeholder="Paste project JSON here"></textarea>
       <div class="acts">
         <button class="btn" id="copyJson">Copy project JSON</button>
+        <button class="btn" id="dlJson">Download .json</button>
         <button class="btn" id="loadJson">Load pasted JSON</button>
         <label class="btn" for="fileJson" style="cursor:pointer">Open .json file</label>
         <input type="file" id="fileJson" accept=".json,application/json" hidden>
@@ -99,6 +100,11 @@
           <label for="floors">Floors <span class="rangeval" id="floorsVal"></span></label>
           <input type="range" id="floors" min="3" max="10" step="1">
         </div>
+      </div>
+      <div class="sec">
+        <h2>Export</h2>
+        <button class="btn primary" id="dlSchem">Download .schem</button>
+        <p class="lbl" id="schemInfo" style="margin:0"></p>
       </div>
       <div class="sec">
         <h2>Floor range</h2>

@@ -10,6 +10,7 @@ import {
 } from "../core/facade.js";
 import { assemble, comboCount, buildingDepth } from "../core/assemble.js";
 import { sampleProject } from "../core/sample.js";
+import { toSchem, schemName } from "../core/schem.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
 
 /* ============================================================
@@ -539,6 +540,14 @@ function renderBuildPanel() {
   const { n, r } = comboCount(P);
   $("comboN").textContent = n.toLocaleString();
   $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital × ${r} floor count${r === 1 ? "" : "s"}`;
+  try {
+    const { size: [w, h, l], blocks } = toSchem(P);
+    $("schemInfo").textContent = `${schemName(P)}.schem: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. Paste point: bottom of the Core Wall’s centre column.`;
+    $("dlSchem").disabled = false;
+  } catch (e) {
+    $("schemInfo").textContent = e.message;
+    $("dlSchem").disabled = true;
+  }
   const rows = $("pwRows");
   rows.innerHTML = "";
   P.partyWall.forEach((e, i) => {
@@ -705,6 +714,24 @@ $("copyJson").onclick = () => {
   $("projText").value = t;
   const fallback = () => { $("projText").focus(); $("projText").select(); toast("Text selected. Press Ctrl+C to copy."); };
   try { navigator.clipboard.writeText(t).then(() => toast("Project JSON copied"), fallback); } catch (e) { fallback(); }
+};
+/** Hands the browser a file to save. */
+function download(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$("dlJson").onclick = () => download("instrumentum-urbis-project.json", new Blob([JSON.stringify(P, null, 2)], { type: "application/json" }));
+$("dlSchem").onclick = async () => {
+  let r;
+  try { r = toSchem(P); } catch (e) { return toast(e.message); }
+  // .schem files are gzipped NBT.
+  const gz = new Blob([r.bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+  download(schemName(P) + ".schem", await new Response(gz).blob());
+  toast("Downloaded " + schemName(P) + ".schem");
 };
 function loadText(t) {
   let p;
