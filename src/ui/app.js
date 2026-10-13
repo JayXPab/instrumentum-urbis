@@ -21,6 +21,7 @@ import { ZipWriter } from "../core/zip.js";
 import { roofDefaults, SLOPED } from "../core/roof.js";
 import { typeList, TYPE_NAMES } from "../core/corner.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
+import { isDesktop, chooseFolder, findModFolders, saveFile, loadFolders, saveFolders } from "./desktop.js";
 
 /* ============================================================
    STATE
@@ -889,12 +890,84 @@ function download(name, blob) {
 $("dlJson").onclick = () => download("instrumentum-urbis-project.json", new Blob([JSON.stringify(P, null, 2)], { type: "application/json" }));
 const gzip = async (bytes) =>
   new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+/* ---------- save to folders (desktop app) ---------- */
+/** This computer's folder for each format, and how bulk exports are saved. */
+const F = loadFolders();
+const FOLDER_TITLES = { bp: "Axiom blueprints folder", schem: "WorldEdit schematics folder", litematic: "Litematica schematics folder" };
+/** The last folder name, for short messages: "…\blueprints". */
+const shortDir = (d) => "…\\" + d.split(/[\\/]/).filter(Boolean).pop();
+
+/** Saves a finished file into its format's folder, or downloads it when there is none. */
+async function deliver(fmt, name, bytes) {
+  if (isDesktop && F[fmt]) {
+    try {
+      await saveFile(F[fmt], name, bytes);
+      toast(`Saved ${name} to ${shortDir(F[fmt])}`);
+    } catch (e) {
+      toast(String(e));
+    }
+  } else {
+    download(name, new Blob([bytes]));
+    toast("Downloaded " + name);
+  }
+}
+
+function renderFolders() {
+  $("folderSec").hidden = !isDesktop;
+  $("bulkToSec").hidden = !isDesktop;
+  const verb = (f) => (isDesktop && F[f] ? "Save" : "Download");
+  $("dlSchem").textContent = verb("schem") + " .schem";
+  $("dlBp").textContent = verb("bp") + " .bp (Axiom)";
+  $("dlLitematic").textContent = verb("litematic") + " .litematic";
+  if (!isDesktop) return;
+  $("folderRows").innerHTML = FORMATS.map((f) => `
+    <div class="frow">
+      <div class="fhead"><b>${FORMAT_NAMES[f]}</b>
+        <span class="fbtns"><button class="btn small" data-choose="${f}">Choose…</button>${F[f] ? `<button class="btn small" data-clear="${f}">Clear</button>` : ""}</span>
+      </div>
+      <div class="fpath">${F[f] ? escapeHtml(F[f]) : "Not set: downloads instead"}</div>
+    </div>`).join("");
+}
+function setFolder(f, dir) {
+  F[f] = dir;
+  saveFolders(F);
+  renderFolders();
+  renderBulk();
+}
+$("folderRows").onclick = async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.clear) return setFolder(b.dataset.clear, "");
+  const f = b.dataset.choose;
+  const dir = await chooseFolder("Choose the " + FOLDER_TITLES[f], F[f]);
+  if (dir) setFolder(f, dir);
+};
+/** Folders found by the last search, for the Use buttons. */
+let found = [];
+$("findFolders").onclick = async () => {
+  $("findFolders").disabled = true;
+  try { found = await findModFolders(); } catch (e) { found = []; toast(String(e)); }
+  $("findFolders").disabled = false;
+  $("foundList").innerHTML = !found.length
+    ? `<p class="lbl" style="margin:0">No mod folders found. A mod makes its folder the first time it runs, so start the game with it once, or pick the folder with Choose….</p>`
+    : `<div class="found">${found.map((x, i) => `
+        <div class="fitem"><div><b>${FORMAT_NAMES[x.format]}</b> · ${escapeHtml(x.launcher)}${x.instance ? ": " + escapeHtml(x.instance) : ""}
+          <div class="fpath">${escapeHtml(x.path)}</div></div>
+          <button class="btn small" data-use="${i}"${F[x.format] === x.path ? " disabled" : ""}>${F[x.format] === x.path ? "In use" : "Use"}</button></div>`).join("")}</div>`;
+};
+$("foundList").onclick = (e) => {
+  const b = e.target.closest("button[data-use]");
+  if (!b) return;
+  const x = found[+b.dataset.use];
+  setFolder(x.format, x.path);
+  $("findFolders").onclick(); // refresh which one says "In use"
+};
+
 $("dlSchem").onclick = async () => {
   let r;
   try { r = toSchem(P); } catch (e) { return toast(e.message); }
   // .schem files are gzipped NBT.
-  download(schemName(P) + ".schem", new Blob([await gzip(r.bytes)]));
-  toast("Downloaded " + schemName(P) + ".schem");
+  await deliver("schem", schemName(P) + ".schem", await gzip(r.bytes));
 };
 /** Builds an Axiom blueprint file, thumbnail included. */
 async function blueprintFile(p = P) {
@@ -917,14 +990,12 @@ async function litematicFile(p = P) {
 $("dlLitematic").onclick = async () => {
   let r;
   try { r = await litematicFile(); } catch (e) { return toast(e.message); }
-  download(schemName(P) + ".litematic", new Blob([r.bytes]));
-  toast("Downloaded " + schemName(P) + ".litematic");
+  await deliver("litematic", schemName(P) + ".litematic", r.bytes);
 };
 $("dlBp").onclick = async () => {
   let bytes;
   try { ({ bytes } = await blueprintFile()); } catch (e) { return toast(e.message); }
-  download(schemName(P) + ".bp", new Blob([bytes]));
-  toast("Downloaded " + schemName(P) + ".bp");
+  await deliver("bp", schemName(P) + ".bp", bytes);
 };
 /* ---------- import ---------- */
 /** The import in progress: file, settings, the blocks turned to face the street, and the plan. */
@@ -1359,14 +1430,24 @@ function renderBulk() {
   $("bulkRand").checked = some && B.random;
   $("bulkRand").disabled = !some;
   $("bulkRandLbl").style.opacity = some ? "" : "0.5";
+  const toFolders = bulkToFolders();
+  $("bulkToZip").checked = !toFolders;
+  $("bulkToFolders").checked = toFolders;
+  $("bulkSubFld").hidden = !toFolders;
+  $("bulkSub").value = F.sub;
+  $("bulkGo").textContent = toFolders ? "Generate files" : "Generate .zip";
+  // Saving into folders needs a folder for every ticked format.
+  const missing = toFolders ? fmts.filter((f) => !F[f]) : [];
   if (!bulkRun) {
     const files = n * fmts.length;
     $("bulkInfo").textContent = !n
       ? "Nothing to export: add a variant to every stage."
+      : missing.length
+      ? `Choose a folder for ${missing.map((f) => FORMAT_NAMES[f]).join(" and ")} under Save to folders (left), or untick it.`
       : `${n.toLocaleString()} building${n === 1 ? "" : "s"}, ${files.toLocaleString()} file${files === 1 ? "" : "s"} (${fmts.map((f) => FORMAT_NAMES[f]).join(", ")})` +
         (n === total ? "" : B.random ? ", picked at random" : ", the first in order") +
         (n > B.limit ? `. That’s more than ${B.limit.toLocaleString()}, so you’ll be asked first.` : ".");
-    $("bulkGo").disabled = !n || checks(P).some((c) => c[0] === "err");
+    $("bulkGo").disabled = !n || missing.length > 0 || checks(P).some((c) => c[0] === "err");
   }
 }
 const bulkSet = (fn) => (e) => { fn(e.target); save(); renderBulk(); };
@@ -1383,6 +1464,18 @@ $("bulkN").onchange = bulkSet((t) => {
   // Empty, or at least the total, means all combinations.
   P.bulk.amount = !(v > 0) || v >= comboCount(P).n ? null : v;
 });
+/** Whether bulk export writes loose files into the format folders (desktop app) instead of one .zip. */
+const bulkToFolders = () => isDesktop && F.bulkTo === "folders";
+$("bulkToZip").onchange = $("bulkToFolders").onchange = (e) => { F.bulkTo = e.target.value; saveFolders(F); renderBulk(); };
+$("bulkSub").onchange = (e) => {
+  const v = e.target.value.trim();
+  // One plain folder name: the same rule the desktop app checks before saving.
+  if (v && (/[\\/:*?"<>|]/.test(v) || /^\.+$/.test(v) || /[. ]$/.test(v))) {
+    toast("A subfolder name can't contain \\ / : * ? \" < > | or end with a dot.");
+  } else F.sub = v;
+  saveFolders(F);
+  renderBulk();
+};
 $("bulkRand").onchange = bulkSet((t) => { P.bulk.random = t.checked; });
 $("bulkSeed").onchange = bulkSet((t) => { P.bulk.seed = Math.max(0, parseInt(t.value, 10) || 0); });
 $("bulkLimit").onchange = bulkSet((t) => { P.bulk.limit = Math.max(1, parseInt(t.value, 10) || bulkDefaults().limit); });
@@ -1397,6 +1490,8 @@ $("bulkGo").onclick = async () => {
   const run = (bulkRun = { cancelled: false });
   const P0 = JSON.parse(JSON.stringify(P)); // edits made while it runs don't mix into this export
   const fmts = bulkFormats(P0);
+  const toFolders = bulkToFolders();
+  const dirs = { ...F }; // folder changes while it runs don't affect this export
   const zip = new ZipWriter();
   const rows = [];
   $("bulkGo").disabled = true;
@@ -1413,30 +1508,28 @@ $("bulkGo").onclick = async () => {
       for (const f of fmts) {
         // With more than one format, each gets its own folder; otherwise the files sit at the top.
         const path = (fmts.length > 1 ? f + "/" : "") + name + "." + f;
-        let blocks;
-        if (f === "bp") {
-          const r = await blueprintFile(q);
-          zip.add(path, r.bytes);
-          blocks = r.blocks;
-        } else if (f === "litematic") {
-          const r = await litematicFile(q);
-          zip.add(path, r.bytes);
-          blocks = r.blocks;
-        } else {
-          const r = toSchem(q);
-          zip.add(path, await gzip(r.bytes));
-          blocks = r.blocks;
-        }
-        rows.push({ file: path, p: q, blocks });
+        let r;
+        if (f === "bp") r = await blueprintFile(q);
+        else if (f === "litematic") r = await litematicFile(q);
+        else { r = toSchem(q); r = { bytes: await gzip(r.bytes), blocks: r.blocks }; }
+        if (toFolders) await saveFile(dirs[f], name + "." + f, r.bytes, dirs.sub);
+        else zip.add(path, r.bytes);
+        rows.push({ file: toFolders ? name + "." + f : path, p: q, blocks: r.blocks });
       }
       await yieldToPage();
+    }
+    if (toFolders) {
+      // The list of buildings goes next to the first format's files.
+      await saveFile(dirs[fmts[0]], "index.csv", new TextEncoder().encode(indexCsv(rows)), dirs.sub);
+      const where = fmts.map((f) => shortDir(dirs[f]) + (dirs.sub ? "\\" + dirs.sub : "")).join(", ");
+      return toast(`Saved ${rows.length.toLocaleString()} files to ${where}`);
     }
     zip.add("index.csv", indexCsv(rows));
     const file = `instrumentum-urbis_${combos.length}-buildings.zip`;
     download(file, new Blob(zip.finish(), { type: "application/zip" }));
     toast(`Downloaded ${file} (${(zip.size / 1048576).toFixed(1)} MB)`);
   } catch (e) {
-    toast("Bulk export stopped: " + e.message);
+    toast("Bulk export stopped: " + (e.message || e));
   } finally {
     bulkRun = null;
     $("bulkStop").hidden = true;
@@ -1513,4 +1606,5 @@ if (document.fonts) document.fonts.ready.then(reTheme);
 export function start() {
   resize(); syncInputs(); renderLayers(); renderPalette(); renderCurrent(); setTool("place");
   renderVariants(); renderChecks(); renderBuildPanel(); render3D(); renderGrid(); fitView();
+  renderFolders();
 }

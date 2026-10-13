@@ -84,9 +84,12 @@ src/core/             the facade rules: NO DOM, NO three.js
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
+  desktop.js          desktop-only calls (folder picker, find/save files); folder settings
 src-tauri/             desktop app shell (Rust): window, settings, later file access
   tauri.conf.json     app name, window size, which commands build the editor
-  src/lib.rs          the Rust program; desktop-only commands go here
+  src/lib.rs          the Rust program; registers plugins and commands
+  src/folders.rs      finding mod folders in launchers; saving files into folders
+  .cargo/config.toml  2 build jobs (the laptop ran out of memory)
   capabilities/       what the editor page is allowed to ask Rust to do
 vite.config.js        dev server on port 5173 (the desktop app expects it)
 tests/                tests for src/core (one file per area)
@@ -206,6 +209,19 @@ moves to the top of whichever left panel is open. A marker shows the paste point
 - Bulk export formats are tick boxes (`bulk.formats`); with more than one, each
   format gets its own folder in the zip. Older `bulk.format` loads as a list.
 - Data version per game version is in `DATA_VERSIONS` (1.21.11 = 4671).
+- **Save to folders** (desktop app only, Export step): one folder per format.
+  With a folder set, the export buttons say "Save" and write straight there;
+  without, they download as in the browser. Folders belong to the computer, not
+  the project: they live in localStorage `instrumentum-urbis.folders.v1`, never
+  in the project JSON. **Find mod folders** lists every existing
+  `config/axiom/blueprints`, `config/worldedit/schematics` and `schematics`
+  folder in the official `.minecraft` and in Modrinth, CurseForge, Prism,
+  PolyMC, ATLauncher, GDLauncher and FTB instances at their default places;
+  anything else is picked with Choose…. Rust saves only plain file names
+  (no `/`, `\`, `..`) inside the chosen folder.
+- Bulk export in the desktop app can save **files in each format's folder**
+  (optionally in a subfolder, default `instrumentum-urbis`) instead of one .zip;
+  `index.csv` goes with the first format's files.
 - The editor stores bare glass panes; the exporter adds their north/south/east/west
   connections. Other blocks are exported exactly as stored.
 
@@ -292,9 +308,9 @@ need a bump.
 10. 🔶 Desktop app (Tauri). Web app frozen at tag `web-v1.0`. Steps:
     1. ✅ Tauri shell: the editor opens in its own window (`npm run desktop`),
        checked on the owner's Windows 10 laptop.
-    2. ⬜ Save files natively: pick a folder once, exports go straight there
-       (e.g. Axiom's blueprints folder). Browser-style downloads may not work in
-       the window yet; check on Windows.
+    2. 🔶 Save to folders: a folder per format, Find mod folders across
+       launchers, bulk export as loose files. Built and tested in the Linux
+       app (awaiting a Windows check). Downloads already worked (Downloads).
     3. ⬜ Find the user's Minecraft installation and read block textures from it
        (the tool must not ship Mojang's assets).
     4. ⬜ Draw blocks with textures, then with their real models.
@@ -307,6 +323,12 @@ need a bump.
 - Blocks outside the catalogue (doors, shelves, lanterns… e.g. from imports) are
   kept and exported exactly, but the 3D view shows them as magenta placeholder
   cubes. To be fixed with real models in the desktop app (see roadmap 10).
+- Testing the desktop app in a cloud session: `npx tauri build --debug --no-bundle`,
+  then drive it with `tauri-driver` (cargo install) and `WebKitWebDriver`
+  (apt `webkit2gtk-driver`) under `xvfb-run`; WebDriver on port 4444.
+- `npm run desktop` (dev) and the installed app have separate storage (different
+  page origins), so a project saved in one isn't in the other. Copy it across
+  with Project → JSON until this is handled (roadmap 10.5).
 - Testing: the `editor-scratch` launch config runs a second dev server on port 5174.
   It has its own browser storage, so tests there never touch the owner's project.
 - Stair shapes (inner/outer corners) are not worked out on export; stairs export

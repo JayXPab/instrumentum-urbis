@@ -129,3 +129,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   .view{height:62vh;order:-1}
   .panel{overflow:visible}
 }
+/* Save to folders (desktop app) */
+.frow{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-top:1px solid var(--line)}
+.frow .fhead{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.frow .fbtns{display:flex;gap:4px}
+.fpath{font-family:var(--f-mono);font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.found{display:flex;flex-direction:column;gap:6px}
+.found .fitem{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.found .fitem div{min-width:0}
+.found .fitem .btn{white-space:nowrap;flex:none}
