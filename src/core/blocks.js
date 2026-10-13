@@ -70,6 +70,28 @@ export function makeState(id, props) {
 
 export const shortId = (/** @type {string} */ id) => id.replace("minecraft:", "");
 
+/** Minecraft's default value for each property the editor may leave out, by shape. */
+const SHAPE_DEFAULTS = {
+  stairs: { facing: "north", half: "bottom", shape: "straight", waterlogged: "false" },
+  slab: { type: "bottom", waterlogged: "false" },
+  pane: { north: "false", south: "false", east: "false", west: "false", waterlogged: "false" },
+  cube: {},
+};
+/** Blocks whose properties differ from the rest of their shape. */
+const ID_DEFAULTS = { "minecraft:quartz_pillar": { axis: "y" } };
+
+/**
+ * Fills in every property Minecraft expects, keeping the ones already set.
+ * Blocks not in the catalogue are returned unchanged.
+ */
+export function fullState(s) {
+  const { id, props } = parseState(s);
+  const d = BMAP[id];
+  if (!d) return s;
+  const all = { ...SHAPE_DEFAULTS[d.shape], ...ID_DEFAULTS[id], ...props };
+  return makeState(id, all);
+}
+
 /** Mirrors a block state across the x axis (east <-> west). */
 export function mirrorState(s) {
   const { id, props } = parseState(s);
