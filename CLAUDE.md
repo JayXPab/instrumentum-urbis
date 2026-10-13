@@ -310,9 +310,9 @@ need a bump.
 10. 🔶 Desktop app (Tauri). Web app frozen at tag `web-v1.0`. Steps:
     1. ✅ Tauri shell: the editor opens in its own window (`npm run desktop`),
        checked on the owner's Windows 10 laptop.
-    2. 🔶 Save to folders: a folder per format, Find mod folders across
-       launchers, bulk export as loose files. Built and tested in the Linux
-       app (awaiting a Windows check). Downloads already worked (Downloads).
+    2. ✅ Save to folders: a folder per format, Find game folders picks a
+       whole profile across launchers, bulk export as loose files (checked on
+       Windows with Modrinth).
     3. ⬜ Find the user's Minecraft installation and read block textures from it
        (the tool must not ship Mojang's assets).
     4. ⬜ Draw blocks with textures, then with their real models.
