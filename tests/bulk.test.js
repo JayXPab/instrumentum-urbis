@@ -22,9 +22,9 @@ test("every combination appears exactly once", () => {
     assert.ok(c.floors >= p.floorMin && c.floors <= p.floorMax);
     assert.ok(c.base < 2 && c.body < 2 && c.capital < 2 && c.roof < 3);
   }
-  assert.deepEqual(comboAt(p, 0), { base: 0, body: 0, capital: 0, roof: 0, floors: 3, depth: 9, type: "mid" });
-  assert.deepEqual(comboAt(p, 6), { base: 0, body: 0, capital: 0, roof: 1, floors: 3, depth: 9, type: "mid" });
-  assert.deepEqual(comboAt(p, 143), { base: 1, body: 1, capital: 1, roof: 2, floors: 8, depth: 9, type: "mid" });
+  assert.deepEqual(comboAt(p, 0), { base: 0, body: 0, capital: 0, roof: 0, floors: 3, depth: 9, type: "mid", colour: null, baseColour: null });
+  assert.deepEqual(comboAt(p, 6), { base: 0, body: 0, capital: 0, roof: 1, floors: 3, depth: 9, type: "mid", colour: null, baseColour: null });
+  assert.deepEqual(comboAt(p, 143), { base: 1, body: 1, capital: 1, roof: 2, floors: 8, depth: 9, type: "mid", colour: null, baseColour: null });
 });
 
 test("an amount below all takes the first N in order", () => {
@@ -70,8 +70,8 @@ test("titles and index.csv use the variant names", () => {
   assert.equal(buildingTitle(p), "Colonnade / Three windows / Parapet / Roof garden, 4 floors");
   p.stages.base[1].name = 'Big, "grand" base';
   const out = indexCsv([{ file: "a.bp", p, blocks: 10 }]).split("\r\n");
-  assert.equal(out[0], "file,type,base,body,capital,roof,floors,depth,seed,blocks");
-  assert.equal(out[1], `a.bp,Mid-row,"Big, ""grand"" base",Three windows,Parapet,Roof garden,4,9,${p.assembly.seed},10`);
+  assert.equal(out[0], "file,type,base,body,capital,roof,floors,depth,colour,base_colour,seed,blocks");
+  assert.equal(out[1], `a.bp,Mid-row,"Big, ""grand"" base",Three windows,Parapet,Roof garden,4,9,,,${p.assembly.seed},10`);
 });
 
 test("a different roof keeps the same party walls", () => {

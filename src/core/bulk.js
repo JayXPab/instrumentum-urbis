@@ -2,20 +2,23 @@
 // which ones a bulk export includes. Pure functions, no DOM, no three.js.
 //
 // A combination is one base, one body and one capital variant and one roof
-// style (by index), a floor count, a depth, and a building type (mid-row or corner). With no roof styles, roof is 0 and the
+// style (by index), a floor count, a depth, a building type (mid-row or corner),
+// and colours (main and base; null where colour isn't used). With no roof styles, roof is 0 and the
 // building has a flat top. Each gets its own party-wall seed, worked out from the
 // project's bulk seed, so exporting again gives exactly the same buildings.
 
 import { comboCount, mulberry32, chosenDepth } from "./assemble.js";
 import { typeList, TYPE_NAMES, OLD_TYPES } from "./corner.js";
+import { colourLists, buildingColours } from "./colour.js";
 
-/** @typedef {{base:number, body:number, capital:number, roof:number, floors:number, depth:number, type:string}} Combo */
+/** @typedef {{base:number, body:number, capital:number, roof:number, floors:number, depth:number, type:string, colour:string|null, baseColour:string|null}} Combo */
 
 /** Bulk export settings saved with the project. amount null = all combinations. */
 export const bulkDefaults = () => ({ format: "bp", amount: null, random: false, seed: 1, limit: 200 });
 
 /**
- * The i-th combination, counting floors fastest, then depth, type, roof, capital, body, base.
+ * The i-th combination, counting floors fastest, then depth, type, colour, base colour,
+ * roof, capital, body, base.
  * @returns {Combo}
  */
 export function comboAt(p, i) {
@@ -27,10 +30,13 @@ export function comboAt(p, i) {
   const floors = p.floorMin + (i % r); i = Math.floor(i / r);
   const depth = p.depthMin + (i % nd); i = Math.floor(i / nd);
   const type = types[i % types.length]; i = Math.floor(i / types.length);
+  const cl = colourLists(p);
+  const colour = cl.main[i % cl.main.length]; i = Math.floor(i / cl.main.length);
+  const baseColour = cl.base[i % cl.base.length]; i = Math.floor(i / cl.base.length);
   const roof = i % nr; i = Math.floor(i / nr);
   const capital = i % nc; i = Math.floor(i / nc);
   const body = i % nb; i = Math.floor(i / nb);
-  return { base: i, body, capital, roof, floors, depth, type };
+  return { base: i, body, capital, roof, floors, depth, type, colour, baseColour };
 }
 
 /** Mixes numbers into one well-spread 32-bit seed. */
@@ -53,7 +59,10 @@ export function hash32(...xs) {
 export const buildingSeed = (seed, c) => hash32(seed, c.base, c.body, c.capital, c.floors);
 
 /** A copy of the project set up to build combination c (the original is untouched). */
-export const forCombo = (p, c) => ({ ...p, assembly: { ...c, seed: buildingSeed(p.bulk.seed, c) } });
+export const forCombo = (p, c) => ({
+  ...p,
+  assembly: { ...c, colour: c.colour ?? "white", baseColour: c.baseColour ?? "white", seed: buildingSeed(p.bulk.seed, c) },
+});
 
 /**
  * How many buildings the bulk settings ask for, out of how many possible.
@@ -97,11 +106,12 @@ const csv = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')
  * @param {Array<{file:string, p:any, blocks:number}>} rows p is the project from forCombo
  */
 export function indexCsv(rows) {
-  const head = ["file", "type", "base", "body", "capital", "roof", "floors", "depth", "seed", "blocks"];
+  const head = ["file", "type", "base", "body", "capital", "roof", "floors", "depth", "colour", "base_colour", "seed", "blocks"];
   const lines = rows.map(({ file, p, blocks }) => {
     const a = p.assembly;
     const roof = p.roofs?.length ? p.roofs[a.roof].name : "";
-    return [file, TYPE_NAMES[OLD_TYPES[a.type] || a.type || "mid"], p.stages.base[a.base].name, p.stages.body[a.body].name, p.stages.capital[a.capital].name, roof, a.floors, chosenDepth(p), a.seed, blocks]
+    const col = buildingColours(p);
+    return [file, TYPE_NAMES[OLD_TYPES[a.type] || a.type || "mid"], p.stages.base[a.base].name, p.stages.body[a.body].name, p.stages.capital[a.capital].name, roof, a.floors, chosenDepth(p), col.main || "", col.base || "", a.seed, blocks]
       .map(csv).join(",");
   });
   return [head.join(","), ...lines].join("\r\n") + "\r\n";

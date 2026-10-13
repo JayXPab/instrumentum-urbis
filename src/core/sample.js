@@ -5,6 +5,7 @@ import { K, newVariant } from "./facade.js";
 import { bulkDefaults } from "./bulk.js";
 import { roofDefaults } from "./roof.js";
 import { typesDefaults } from "./corner.js";
+import { coloursDefaults } from "./colour.js";
 
 export function sampleProject() {
   const p = {
@@ -26,8 +27,9 @@ export function sampleProject() {
       { block: "minecraft:mud_bricks", weight: 1 },
       { block: "minecraft:terracotta", weight: 1 },
     ],
-    assembly: { base: 0, body: 0, capital: 0, roof: 0, floors: 5, depth: 9, type: "mid", seed: 7 },
+    assembly: { base: 0, body: 0, capital: 0, roof: 0, floors: 5, depth: 9, type: "mid", colour: "white", baseColour: "white", seed: 7 },
     types: typesDefaults(),
+    colours: coloursDefaults(),
     roofs: [
       roofDefaults({ name: "Slate gable", type: "gable", height: 4, edge: 1 }),
       roofDefaults({

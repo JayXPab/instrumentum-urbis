@@ -1,7 +1,8 @@
 // Assembly: stacks Base + Body × (floors − 2) + Capital into one building,
 // fills party walls, then puts the chosen roof on top. Pure functions, no DOM, no three.js.
 
-import { BMAP } from "./blocks.js";
+import { BMAP, recolour, colourName } from "./blocks.js";
+import { colourFor, colourLists, buildingColours } from "./colour.js";
 import { K, unK, bounds, clamp } from "./facade.js";
 import { roofBlocks } from "./roof.js";
 import { cornerOf, buildCorner, typeList } from "./corner.js";
@@ -60,9 +61,10 @@ export function assemble(p) {
 
   const put = (v, kind, copy, total) => {
     if (!v) return;
+    const colour = colourFor(p, kind); // white slot blocks take this colour
     for (const [k, s] of Object.entries(v.blocks)) {
       const [x, y, z] = unK(k);
-      cells.set(K(x, y + y0, z), { s, kind, copy });
+      cells.set(K(x, y + y0, z), { s: colour ? recolour(s, colour) : s, kind, copy });
     }
     segs.push({ kind, copy, total, y0, h: p.heights[kind], name: v.name });
     y0 += p.heights[kind];
@@ -145,17 +147,24 @@ export function buildingTitle(p) {
   const corner = cornerOf(p);
   const deep = p.depthMax > p.depthMin ? `, ${chosenDepth(p)} deep` : "";
   const type = corner ? (corner.chamfer ? ", corner, chamfered" : ", corner") : "";
-  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors${deep}${type}`;
+  const col = buildingColours(p);
+  const colours = (col.main ? ", " + colourName(col.main).toLowerCase() : "") + (col.base ? `, ${colourName(col.base).toLowerCase()} base` : "");
+  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors${deep}${type}${colours}`;
 }
 
 /**
  * Number of distinct buildings the project can make: every ticked building type
- * (mid-row, corner, chamfered corner) in every depth of the range.
+ * (mid-row, corner, chamfered corner) in every depth of the range, in every
+ * ticked colour (and base colour, when the base has its own).
  */
 export function comboCount(p) {
   const r = Math.max(0, p.floorMax - p.floorMin + 1);
   const roofs = Math.max(1, (p.roofs || []).length);
   const depths = Math.max(0, p.depthMax - p.depthMin + 1);
   const types = typeList(p).length;
-  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r * depths * types, r, roofs, depths, types };
+  const cl = colourLists(p), colours = cl.main.length, baseColours = cl.base.length;
+  return {
+    n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r * depths * types * colours * baseColours,
+    r, roofs, depths, types, colours, baseColours,
+  };
 }

@@ -8,6 +8,7 @@
 import { bulkDefaults } from "./bulk.js";
 import { roofDefaults } from "./roof.js";
 import { typesDefaults, OLD_TYPES } from "./corner.js";
+import { coloursDefaults } from "./colour.js";
 
 export const FORMAT = "instrumentum-urbis/facade";
 export const FORMAT_VERSION = 2;
@@ -38,6 +39,9 @@ export function upgradeProject(p) {
   delete t.left;
   delete t.right;
   p.types = { ...typesDefaults(), ...t };
+  p.colours = { ...coloursDefaults(), ...p.colours };
+  p.assembly.colour ??= "white";
+  p.assembly.baseColour ??= "white";
   p.partyWall ??= [];
   p.roofs = (p.roofs || []).map((r) => roofDefaults(r));
   p.bulk = { ...bulkDefaults(), ...p.bulk };
