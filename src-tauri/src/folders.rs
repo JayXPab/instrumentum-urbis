@@ -3,10 +3,11 @@
 //!
 //! Every launcher keeps its game folders (".minecraft", "instances",
 //! "profiles") in a different place, so we look in the usual places and list
-//! each game folder where a mod has already made its folder. Anything we miss
-//! can still be picked by hand with the folder picker.
+//! each game folder with the mod folders it already has, for the user to pick
+//! one. Anything we miss can still be picked by hand with the folder picker.
 
 use serde::Serialize;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -17,16 +18,16 @@ const MOD_FOLDERS: [(&str, &[&str]); 3] = [
     ("litematic", &["schematics"]),
 ];
 
-/// One mod folder we found.
+/// One game folder we found (a profile or instance, or the normal .minecraft).
 #[derive(Serialize)]
-pub struct Found {
-    /// "bp", "schem" or "litematic".
-    format: &'static str,
+pub struct GameFolder {
     /// Which launcher it belongs to, e.g. "Modrinth".
     launcher: String,
     /// The instance or profile name; empty for the normal .minecraft folder.
     instance: String,
     path: String,
+    /// The mod folders it already has: format ("bp", "schem", "litematic") -> folder.
+    mods: BTreeMap<&'static str, String>,
 }
 
 /// A launcher's instances: every folder inside `dir`, with the game folder
@@ -94,19 +95,27 @@ fn game_folders() -> Vec<(String, String, PathBuf)> {
     out
 }
 
-/// Lists every mod folder that already exists in a game folder we know.
+/// Lists every game folder we know of, with the mod folders each one has.
+/// Game folders with mods come first.
 #[tauri::command]
-pub fn find_mod_folders() -> Vec<Found> {
+pub fn find_mod_folders() -> Vec<GameFolder> {
     let mut found = Vec::new();
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashSet::new();
     for (launcher, instance, game) in game_folders() {
+        if !game.is_dir() || !seen.insert(game.clone()) {
+            continue;
+        }
+        let mut mods = BTreeMap::new();
         for (format, parts) in MOD_FOLDERS {
             let path: PathBuf = parts.iter().fold(game.clone(), |p, s| p.join(s));
-            if path.is_dir() && seen.insert(path.clone()) {
-                found.push(Found { format, launcher: launcher.clone(), instance: instance.clone(), path: path.to_string_lossy().into_owned() });
+            if path.is_dir() {
+                mods.insert(format, path.to_string_lossy().into_owned());
             }
         }
+        found.push(GameFolder { launcher, instance, path: game.to_string_lossy().into_owned(), mods });
     }
+    // Stable sort: keeps the launcher order, puts game folders without mods last.
+    found.sort_by_key(|g| g.mods.is_empty());
     found
 }
 

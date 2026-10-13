@@ -213,11 +213,13 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   With a folder set, the export buttons say "Save" and write straight there;
   without, they download as in the browser. Folders belong to the computer, not
   the project: they live in localStorage `instrumentum-urbis.folders.v1`, never
-  in the project JSON. **Find mod folders** lists every existing
-  `config/axiom/blueprints`, `config/worldedit/schematics` and `schematics`
-  folder in the official `.minecraft` and in Modrinth, CurseForge, Prism,
-  PolyMC, ATLauncher, GDLauncher and FTB instances at their default places;
-  anything else is picked with Choose…. Rust saves only plain file names
+  in the project JSON. **Find game folders** lists every game folder (the
+  official `.minecraft`, and each Modrinth, CurseForge, Prism, PolyMC,
+  ATLauncher, GDLauncher and FTB profile at their default places) with the mod
+  folders it has (`config/axiom/blueprints`, `config/worldedit/schematics`,
+  `schematics`); folders with mods first. **Use** points every format at that
+  one profile, and a format whose mod isn't there is cleared (downloads).
+  Anything else is picked per format with Choose…. Rust saves only plain file names
   (no `/`, `\`, `..`) inside the chosen folder.
 - Bulk export in the desktop app can save **files in each format's folder**
   (optionally in a subfolder, default `instrumentum-urbis`) instead of one .zip;

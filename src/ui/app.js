@@ -933,6 +933,7 @@ function setFolder(f, dir) {
   saveFolders(F);
   renderFolders();
   renderBulk();
+  refreshFound();
 }
 $("folderRows").onclick = async (e) => {
   const b = e.target.closest("button");
@@ -942,26 +943,42 @@ $("folderRows").onclick = async (e) => {
   const dir = await chooseFolder("Choose the " + FOLDER_TITLES[f], F[f]);
   if (dir) setFolder(f, dir);
 };
-/** Folders found by the last search, for the Use buttons. */
+/** Game folders found by the last search, for the Use buttons. */
 let found = [];
+const MOD_NAMES = { bp: "Axiom", schem: "WorldEdit", litematic: "Litematica" };
+/** Whether a game folder is the one the format folders point at. */
+const inUse = (g) => FORMATS.some((f) => F[f] && g.mods[f] === F[f]);
+function renderFound() {
+  $("foundList").innerHTML = !found.length
+    ? `<p class="lbl" style="margin:0">No game folders found. Pick each format's folder with Choose….</p>`
+    : `<p class="lbl" style="margin:0">Pick the game folder (profile or instance) to save into:</p><div class="found">${found.map((g, i) => {
+        const has = FORMATS.filter((f) => g.mods[f]);
+        return `<div class="fitem"><div><b>${escapeHtml(g.launcher)}${g.instance ? ": " + escapeHtml(g.instance) : ""}</b>
+          <div class="lbl">${has.length ? FORMATS.map((f) => (g.mods[f] ? "✓ " : "✗ ") + MOD_NAMES[f]).join(" · ") : "No Axiom, WorldEdit or Litematica folder yet"}</div>
+          <div class="fpath">${escapeHtml(g.path)}</div></div>
+          <button class="btn small" data-use="${i}"${!has.length || inUse(g) ? " disabled" : ""}
+            title="${has.length ? "Save each format into this game folder" : "A mod makes its folder the first time the game runs with it"}">${inUse(g) ? "In use" : "Use"}</button></div>`;
+      }).join("")}</div>`;
+}
 $("findFolders").onclick = async () => {
   $("findFolders").disabled = true;
   try { found = await findModFolders(); } catch (e) { found = []; toast(String(e)); }
   $("findFolders").disabled = false;
-  $("foundList").innerHTML = !found.length
-    ? `<p class="lbl" style="margin:0">No mod folders found. A mod makes its folder the first time it runs, so start the game with it once, or pick the folder with Choose….</p>`
-    : `<div class="found">${found.map((x, i) => `
-        <div class="fitem"><div><b>${FORMAT_NAMES[x.format]}</b> · ${escapeHtml(x.launcher)}${x.instance ? ": " + escapeHtml(x.instance) : ""}
-          <div class="fpath">${escapeHtml(x.path)}</div></div>
-          <button class="btn small" data-use="${i}"${F[x.format] === x.path ? " disabled" : ""}>${F[x.format] === x.path ? "In use" : "Use"}</button></div>`).join("")}</div>`;
+  renderFound();
 };
 $("foundList").onclick = (e) => {
   const b = e.target.closest("button[data-use]");
   if (!b) return;
-  const x = found[+b.dataset.use];
-  setFolder(x.format, x.path);
-  $("findFolders").onclick(); // refresh which one says "In use"
+  const g = found[+b.dataset.use];
+  // Every format points at this game folder; a mod it doesn't have downloads instead.
+  for (const f of FORMATS) F[f] = g.mods[f] || "";
+  saveFolders(F);
+  renderFolders(); renderBulk(); renderFound();
+  const missing = FORMATS.filter((f) => !g.mods[f]).map((f) => MOD_NAMES[f]);
+  toast(`Saving into ${g.instance || g.launcher}` + (missing.length ? `. No ${missing.join(" or ")} there: those download instead.` : ""));
 };
+/** Shows the search's In use marks again after a folder changes by hand. */
+const refreshFound = () => { if (found.length) renderFound(); };
 
 $("dlSchem").onclick = async () => {
   let r;
