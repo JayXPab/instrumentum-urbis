@@ -257,11 +257,17 @@ need a bump.
    gradient bands (checked in game). Later: dormers, hipped mid-row roofs.
 9. 🔶 Schematic import: .schem/.litematic/.bp, Core Wall and edges, whole facade
    or one stage, recentred to x = 0: built (awaiting in-game files check).
-10. ⬜ Desktop app (Tauri); later the in-game mod
+10. ⬜ Desktop app (Tauri); later the in-game mod. Plan for it: draw every block
+    with its real model and texture, read from the user's own Minecraft
+    installation (the tool must not ship Mojang's assets); save exports straight
+    into Axiom's blueprints folder.
 
 ## Known limits
 
 - Blocks are drawn as flat colours, not textures. Stair, pane and plant shapes are simplified.
+- Blocks outside the catalogue (doors, shelves, lanterns… e.g. from imports) are
+  kept and exported exactly, but the 3D view shows them as magenta placeholder
+  cubes. To be fixed with real models in the desktop app (see roadmap 10).
 - Testing: the `editor-scratch` launch config runs a second dev server on port 5174.
   It has its own browser storage, so tests there never touch the owner's project.
 - Stair shapes (inner/outer corners) are not worked out on export; stairs export
