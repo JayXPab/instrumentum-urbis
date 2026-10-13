@@ -82,9 +82,11 @@ The top bar has three steps:
 3. **Export**: single-building downloads and bulk export. Future export
    features go here.
 
-Final Assembly and Export show the same building in 3D. The Combinations section
-(with Random building) is one element that moves to the top of whichever of the
-two is open. "Fade repeated body floors" starts off.
+Final Assembly and Export show the same building in 3D, with settings on both
+sides of the view (left: what to build; right: roofs, party walls, display, or
+bulk export). The Combinations section (with Random building) is one element that
+moves to the top of whichever left panel is open. A marker shows the paste point
+(the block at 0,0,0). "Fade repeated body floors" starts off.
 
 ## Design decisions
 

@@ -233,8 +233,38 @@ function render3D() {
     const R = Math.max(P.width, buildingDepth(P)) + 6;
     for (let i = -R; i <= R; i++) { gp.push([i - 0.5, 0, -R], [i - 0.5, 0, R]); gp.push([-R, 0, i - 0.5], [R, 0, i - 0.5]); }
     addLines(helpers, gp, muted, 0.12);
+    helpers.add(pasteMarker(accent));
   }
   world.traverse((o) => { if (o.isMesh) voxelMeshes.push(o); });
+}
+
+/**
+ * The paste point: where the player stands for //paste, or where Axiom
+ * anchors the blueprint. It is the block at x = 0, y = 0, z = 0, the bottom
+ * of the Core Wall's centre column. Drawn on top so it shows through walls.
+ */
+function pasteMarker(color) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), depthTest: false, transparent: true, opacity: 0.95 });
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), mat);
+  gem.position.set(0, 0.5, 0);
+  gem.renderOrder = 30;
+  gem.userData.own = true;
+  g.add(gem);
+  const box = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02)),
+    new THREE.LineBasicMaterial({ color: new THREE.Color(color), depthTest: false, transparent: true }),
+  );
+  box.position.set(0, 0.5, 0);
+  box.renderOrder = 30;
+  box.userData.own = true;
+  g.add(box);
+  const label = textSprite("paste point", color);
+  label.center.set(0, 0.5); // text starts beside the marker and runs outward
+  label.position.set(0.75, 0.5, 0.9);
+  label.renderOrder = 31;
+  g.add(label);
+  return g;
 }
 
 function fitView() {
@@ -627,7 +657,7 @@ function renderBuildPanel() {
   $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}${depths}`;
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
-    $("schemInfo").textContent = `${schemName(P)}: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. Paste point: bottom of the Core Wall’s centre column.`;
+    $("schemInfo").textContent = `${schemName(P)}: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. The paste point is marked in the 3D view.`;
     $("dlSchem").disabled = $("dlBp").disabled = false;
   } catch (e) {
     $("schemInfo").textContent = e.message;
@@ -784,8 +814,8 @@ function setMode(m) {
   $("modeExport").setAttribute("aria-pressed", String(m === "export"));
   $("leftEdit").hidden = m !== "edit";
   $("rightEdit").hidden = m !== "edit";
-  $("leftBuild").hidden = m !== "build";
-  $("leftExport").hidden = m !== "export";
+  $("leftBuild").hidden = $("rightBuild").hidden = m !== "build";
+  $("leftExport").hidden = $("rightExport").hidden = m !== "export";
   // Combinations and Random building show at the top of both Final Assembly and Export.
   const panel = m === "export" ? $("leftExport") : $("leftBuild");
   if ($("comboSec").parentElement !== panel) panel.prepend($("comboSec"));
