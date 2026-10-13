@@ -45,6 +45,7 @@ src/core/             the facade rules: NO DOM, NO three.js
   sample.js           the sample facade the editor opens with
   nbt.js              NBT (Minecraft binary format) writer/reader, varints
   schem.js            assembled building -> Sponge v3 .schem; pane connections
+  blueprint.js        assembled building -> Axiom .bp (16³ sections, file layout)
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
@@ -100,6 +101,14 @@ ported to Java for the mod, and the part the tests cover.
 - Our axes match Minecraft: +x east, +y up, +z south. No rotation on export.
 - The **paste point** (where the player stands for `//paste`) is the bottom of
   the Core Wall's centre column: x = 0, y = 0, z = 0.
+- **.bp** is an Axiom blueprint: magic `0x0AE5BB36`, then length-prefixed header
+  NBT, PNG thumbnail and gzipped block NBT. The layout comes from Axiom's
+  open-source server plugin (`BlueprintIo.java`, `BlueprintHeader.java`). Blocks are
+  16³ sections packed like Minecraft chunks; empty cells are `void_air`, so placing
+  a blueprint never erases what is already there (unlike `.schem`, which writes air).
+  The thumbnail is a 256 px render of the building made in the browser.
+- `.bp` writes every block property (`fullState`), filling defaults the editor
+  leaves out. `.schem` writes states as stored.
 - Data version per game version is in `DATA_VERSIONS` (1.21.11 = 4671).
 - The editor stores bare glass panes; the exporter adds their north/south/east/west
   connections. Other blocks are exported exactly as stored.
@@ -117,8 +126,8 @@ changes, bump `formatVersion` and keep loading older files.
 2. ✅ 3D viewer
 3. ✅ Stage editor (3D clicking + elevation grid, mirror, undo)
 4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
-5. 🔶 Export: WorldEdit `.schem` ✅ (checked in game on 1.21.11). Next: Litematica
-   `.litematic` and Axiom `.bp`.
+5. 🔶 Export: WorldEdit `.schem` ✅ (checked in game on 1.21.11). Axiom `.bp`
+   built (awaiting in-game check). Next: Litematica `.litematic`.
 6. ⬜ Combination generator with bulk export ("all combinations" warns above a limit)
 7. ⬜ Corners: sharp, then chamfered, with the merge/trim rule
 8. ⬜ Roofs: gable, mansard, convex mansard, sloped; roof block and gradients

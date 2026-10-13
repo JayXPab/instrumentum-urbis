@@ -11,6 +11,7 @@ import {
 import { assemble, comboCount, buildingDepth } from "../core/assemble.js";
 import { sampleProject } from "../core/sample.js";
 import { toSchem, schemName } from "../core/schem.js";
+import { blueprintParts, packBlueprint } from "../core/blueprint.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
 
 /* ============================================================
@@ -252,6 +253,54 @@ new ResizeObserver(() => { resize(); renderGrid(); }).observe(canvas.parentEleme
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 })();
+
+/**
+ * Pictures the assembled building alone (no guides, no fading) from the
+ * front-right, as a square PNG with a transparent background.
+ * @returns {Promise<Uint8Array>}
+ */
+async function thumbnailPng(size = 256) {
+  const g = new THREE.Group();
+  for (const [k, c] of assemble(P).cells) { const [x, y, z] = unK(k); g.add(blockObject(c.s, x, y, z)); }
+  const shown = [world.visible, helpers.visible, hover.visible], bg = scene.background, alpha = renderer.getClearAlpha();
+  world.visible = helpers.visible = hover.visible = false;
+  scene.background = null;
+  renderer.setClearAlpha(0);
+  scene.add(g);
+
+  const sphere = new THREE.Box3().setFromObject(g).getBoundingSphere(new THREE.Sphere());
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 2000);
+  const dist = sphere.radius / Math.sin((cam.fov * Math.PI) / 360);
+  cam.position.copy(sphere.center).addScaledVector(new THREE.Vector3(0.6, 0.45, 1).normalize(), dist);
+  cam.lookAt(sphere.center);
+
+  const rt = new THREE.WebGLRenderTarget(size, size, { samples: 4 });
+  rt.texture.colorSpace = THREE.SRGBColorSpace;
+  const px = new Uint8Array(size * size * 4);
+  try {
+    renderer.setRenderTarget(rt);
+    renderer.clear();
+    renderer.render(scene, cam);
+    renderer.readRenderTargetPixels(rt, 0, 0, size, size, px);
+  } finally {
+    renderer.setRenderTarget(null);
+    rt.dispose();
+    scene.remove(g);
+    clearGroup(g);
+    [world.visible, helpers.visible, hover.visible] = shown;
+    scene.background = bg;
+    renderer.setClearAlpha(alpha);
+  }
+
+  // WebGL rows run bottom to top; images run top to bottom.
+  const c2 = document.createElement("canvas");
+  c2.width = c2.height = size;
+  const img = new ImageData(size, size);
+  for (let y = 0; y < size; y++) img.data.set(px.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
+  c2.getContext("2d").putImageData(img, 0, 0);
+  const blob = await new Promise((res) => c2.toBlob(res, "image/png"));
+  return new Uint8Array(await blob.arrayBuffer());
+}
 
 /* ---------- clicking in 3D ---------- */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -542,11 +591,11 @@ function renderBuildPanel() {
   $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital × ${r} floor count${r === 1 ? "" : "s"}`;
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
-    $("schemInfo").textContent = `${schemName(P)}.schem: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. Paste point: bottom of the Core Wall’s centre column.`;
-    $("dlSchem").disabled = false;
+    $("schemInfo").textContent = `${schemName(P)}: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. Paste point: bottom of the Core Wall’s centre column.`;
+    $("dlSchem").disabled = $("dlBp").disabled = false;
   } catch (e) {
     $("schemInfo").textContent = e.message;
-    $("dlSchem").disabled = true;
+    $("dlSchem").disabled = $("dlBp").disabled = true;
   }
   const rows = $("pwRows");
   rows.innerHTML = "";
@@ -725,13 +774,25 @@ function download(name, blob) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $("dlJson").onclick = () => download("instrumentum-urbis-project.json", new Blob([JSON.stringify(P, null, 2)], { type: "application/json" }));
+const gzip = async (bytes) =>
+  new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
 $("dlSchem").onclick = async () => {
   let r;
   try { r = toSchem(P); } catch (e) { return toast(e.message); }
   // .schem files are gzipped NBT.
-  const gz = new Blob([r.bytes]).stream().pipeThrough(new CompressionStream("gzip"));
-  download(schemName(P) + ".schem", await new Response(gz).blob());
+  download(schemName(P) + ".schem", new Blob([await gzip(r.bytes)]));
   toast("Downloaded " + schemName(P) + ".schem");
+};
+/** Builds the Axiom blueprint file, thumbnail included. */
+async function blueprintFile() {
+  const parts = blueprintParts(P);
+  return packBlueprint(parts.header, await thumbnailPng(), await gzip(parts.blocks));
+}
+$("dlBp").onclick = async () => {
+  let bytes;
+  try { bytes = await blueprintFile(); } catch (e) { return toast(e.message); }
+  download(schemName(P) + ".bp", new Blob([bytes]));
+  toast("Downloaded " + schemName(P) + ".bp");
 };
 function loadText(t) {
   let p;
