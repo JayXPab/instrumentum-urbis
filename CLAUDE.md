@@ -255,8 +255,8 @@ need a bump.
    Later: repeating facade bays instead of a continued wall.
 8. ✅ Roofs: gable, sloped, mansard, convex mansard, flat, garden; materials and
    gradient bands (checked in game). Later: dormers, hipped mid-row roofs.
-9. 🔶 Schematic import: .schem/.litematic/.bp, Core Wall and edges, whole facade
-   or one stage, recentred to x = 0: built (awaiting in-game files check).
+9. ✅ Schematic import: .schem/.litematic/.bp, Core Wall and edges, whole facade
+   or one stage, recentred to x = 0 (checked in game).
 10. ⬜ Desktop app (Tauri); later the in-game mod. Plan for it: draw every block
     with its real model and texture, read from the user's own Minecraft
     installation (the tool must not ship Mojang's assets); save exports straight
