@@ -68,7 +68,7 @@ test("the .bp file has the magic number, header, thumbnail and gzipped blocks", 
   const { header, thumbnail, gzBlocks } = unpackBlueprint(file);
   const h = readNbt(header).root.value;
   assert.equal(h.Version.value, 2);
-  assert.equal(h.Name.value, "facade_b1-b1-c1_5fl");
+  assert.equal(h.Name.value, "Shopfront / Three windows / Cornice, 5 floors");
   assert.deepEqual([...thumbnail], [137, 80, 78, 71]);
   assert.equal(readNbt(gunzipSync(gzBlocks)).root.value.DataVersion.value, 4671);
 });

@@ -2,6 +2,7 @@
 
 import { makeState } from "./blocks.js";
 import { K, newVariant } from "./facade.js";
+import { bulkDefaults } from "./bulk.js";
 
 export function sampleProject() {
   const p = {
@@ -23,6 +24,7 @@ export function sampleProject() {
       { block: "minecraft:terracotta", weight: 1 },
     ],
     assembly: { base: 0, body: 0, capital: 0, floors: 5, seed: 7 },
+    bulk: bulkDefaults(),
   };
   const S = (v, x, y, z, s) => {
     if (s) v.blocks[K(x, y, z)] = s;

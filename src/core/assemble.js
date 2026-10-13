@@ -84,6 +84,14 @@ export function assemble(p) {
   return { cells, segs, height: y0, floors };
 }
 
+/** Readable name of the building in p.assembly, e.g. "Shopfront / Three windows / Cornice, 5 floors". */
+export function buildingTitle(p) {
+  const a = p.assembly;
+  const floors = clamp(a.floors, p.floorMin, p.floorMax);
+  const n = (kind, i) => p.stages[kind][i]?.name ?? "?";
+  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}, ${floors} floors`;
+}
+
 /** Number of distinct buildings the current variants and floor range can make. */
 export function comboCount(p) {
   const r = Math.max(0, p.floorMax - p.floorMin + 1);

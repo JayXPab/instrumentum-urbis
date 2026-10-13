@@ -15,8 +15,8 @@
 
 import { parseState, fullState } from "./blocks.js";
 import { unK } from "./facade.js";
-import { assemble } from "./assemble.js";
-import { connectPanes, DATA_VERSIONS, schemName } from "./schem.js";
+import { assemble, buildingTitle } from "./assemble.js";
+import { connectPanes, DATA_VERSIONS } from "./schem.js";
 import { nbt, TAG, writeNbt } from "./nbt.js";
 
 export const BP_MAGIC = 0x0ae5bb36;
@@ -86,7 +86,7 @@ export function blueprintParts(p) {
 
   const header = nbt.compound({
     Version: nbt.int(HEADER_VERSION),
-    Name: nbt.string(schemName(p)),
+    Name: nbt.string(buildingTitle(p)),
     Author: nbt.string(""),
     Tags: nbt.list(TAG.String, []),
     ThumbnailYaw: nbt.float(135),
