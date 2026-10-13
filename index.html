@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Instrumentum Urbis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+</head>
+<body>
+<div class="app" id="app" data-mode="edit">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">IU</div>
+      <div><h1>Instrumentum Urbis</h1><p>Facade Editor · prototype 0.1</p></div>
+    </div>
+    <div class="seg" role="group" aria-label="View">
+      <button id="modeEdit" aria-pressed="true">Stage editor</button>
+      <button id="modeBuild" aria-pressed="false">Assembled building</button>
+    </div>
+    <div class="topctl">
+      <label for="mcVersion">Minecraft</label>
+      <select id="mcVersion"><option value="1.21.11">Java 1.21.11</option></select>
+      <button class="btn" id="projBtn" aria-expanded="false">Project</button>
+    </div>
+  </header>
+
+  <section class="drawer" id="drawer" hidden>
+    <div class="sec" style="padding:0;border:0">
+      <h2>Project file</h2>
+      <p class="lbl" style="margin:0">Your work saves in this browser automatically. To keep a copy elsewhere, copy the project JSON and save it in a text file. Load it back by pasting it here or choosing the file.</p>
+      <textarea id="projText" rows="5" spellcheck="false" placeholder="Paste project JSON here"></textarea>
+      <div class="acts">
+        <button class="btn" id="copyJson">Copy project JSON</button>
+        <button class="btn" id="loadJson">Load pasted JSON</button>
+        <label class="btn" for="fileJson" style="cursor:pointer">Open .json file</label>
+        <input type="file" id="fileJson" accept=".json,application/json" hidden>
+        <button class="btn danger" id="resetSample">Reset to sample facade</button>
+      </div>
+    </div>
+  </section>
+
+  <main class="work">
+    <!-- STAGE EDITOR: left -->
+    <aside class="panel" id="leftEdit">
+      <div class="sec">
+        <h2>Facade <small id="xrange"></small></h2>
+        <div class="row">
+          <div class="fld"><label for="inWidth">Width</label><input type="number" id="inWidth" min="3" max="48"></div>
+          <div class="fld"><label for="inFront">Front +z</label><input type="number" id="inFront" min="0" max="12"></div>
+          <div class="fld"><label for="inBack">Back −z</label><input type="number" id="inBack" min="0" max="12"></div>
+        </div>
+        <div class="readout" id="axisInfo"></div>
+      </div>
+      <div class="sec">
+        <h2>Floor heights</h2>
+        <div class="row">
+          <div class="fld"><label for="hBase">Base</label><input type="number" id="hBase" min="2" max="24"></div>
+          <div class="fld"><label for="hBody">Body</label><input type="number" id="hBody" min="2" max="24"></div>
+          <div class="fld"><label for="hCap">Capital</label><input type="number" id="hCap" min="1" max="24"></div>
+        </div>
+        <div class="fld"><label for="coreBlock">Core wall block for new variants</label><select id="coreBlock"></select></div>
+      </div>
+      <div class="sec">
+        <h2>Stages</h2>
+        <div class="stagetabs" role="group" aria-label="Stage">
+          <button data-stage="base" aria-pressed="true">Base<small id="cntBase"></small></button>
+          <button data-stage="body" aria-pressed="false">Body<small id="cntBody"></small></button>
+          <button data-stage="capital" aria-pressed="false">Capital<small id="cntCap"></small></button>
+        </div>
+        <ul class="vlist" id="vlist"></ul>
+        <div class="row2">
+          <button class="btn" id="newVar">New variant</button>
+          <button class="btn" id="dupVar">Duplicate</button>
+        </div>
+        <div class="fld"><label for="varName">Variant name</label><input type="text" id="varName" maxlength="40"></div>
+        <button class="btn danger small" id="delVar" style="align-self:flex-start">Delete variant</button>
+      </div>
+      <div class="sec">
+        <h2>Checks</h2>
+        <ul class="checks" id="checks"></ul>
+      </div>
+    </aside>
+
+    <!-- ASSEMBLY: left -->
+    <aside class="panel" id="leftBuild" hidden>
+      <div class="sec">
+        <h2>Combinations</h2>
+        <div class="combo" id="comboN">0</div>
+        <div class="formula" id="comboF"></div>
+        <button class="btn primary" id="randomize">Random building</button>
+      </div>
+      <div class="sec">
+        <h2>This building</h2>
+        <div class="fld"><label for="pickBase">Base</label><select id="pickBase"></select></div>
+        <div class="fld"><label for="pickBody">Body</label><select id="pickBody"></select></div>
+        <div class="fld"><label for="pickCap">Capital</label><select id="pickCap"></select></div>
+        <div class="fld">
+          <label for="floors">Floors <span class="rangeval" id="floorsVal"></span></label>
+          <input type="range" id="floors" min="3" max="10" step="1">
+        </div>
+      </div>
+      <div class="sec">
+        <h2>Floor range</h2>
+        <div class="row2">
+          <div class="fld"><label for="fMin">Minimum</label><input type="number" id="fMin" min="3" max="200"></div>
+          <div class="fld"><label for="fMax">Maximum</label><input type="number" id="fMax" min="3" max="200"></div>
+        </div>
+        <p class="lbl" style="margin:0">Base and capital are one floor each. Every extra floor repeats the chosen body.</p>
+      </div>
+      <div class="sec">
+        <h2>Party walls</h2>
+        <p class="lbl" style="margin:0">Side and back walls for buildings that stand wall to wall. Each block is picked at random by weight.</p>
+        <div class="fld"><label for="bDepth">Building depth (blocks, including core wall)</label><input type="number" id="bDepth" min="3" max="64"></div>
+        <div id="pwRows" style="display:flex;flex-direction:column;gap:6px"></div>
+        <button class="btn small" id="pwAdd" style="align-self:flex-start">Add block</button>
+      </div>
+      <div class="sec">
+        <h2>Display</h2>
+        <label class="chk"><input type="checkbox" id="optFade"> Fade repeated body floors</label>
+        <label class="chk"><input type="checkbox" id="optLabels"> Show floor labels</label>
+      </div>
+    </aside>
+
+    <section class="view" id="view">
+      <canvas id="gl" aria-label="3D view of the facade"></canvas>
+      <div class="viewtag" id="viewtag"></div>
+      <div class="viewbar"><button class="btn small" id="resetView">Reset view</button></div>
+      <div class="hud">
+        <div class="coord" id="coord">—</div>
+        <div class="hint" id="hint"></div>
+      </div>
+    </section>
+
+    <!-- STAGE EDITOR: right -->
+    <aside class="panel" id="rightEdit">
+      <div class="sec">
+        <h2>Tool</h2>
+        <div class="seg" role="group" aria-label="Tool" id="tools" style="align-self:flex-start">
+          <button data-tool="place" aria-pressed="true">Place</button>
+          <button data-tool="erase" aria-pressed="false">Erase</button>
+          <button data-tool="pick" aria-pressed="false">Pick</button>
+        </div>
+        <label class="chk"><input type="checkbox" id="optMirror"> Mirror across the axis</label>
+        <div class="current"><div class="sw" id="curSw"></div><div style="min-width:0"><b id="curName"></b><code id="curState"></code></div></div>
+        <div class="row2" id="stairOpts">
+          <div class="fld"><label for="facing">Stair facing</label><select id="facing"><option value="north">north (−z)</option><option value="south">south (+z)</option><option value="east">east (+x)</option><option value="west">west (−x)</option></select></div>
+          <div class="fld"><label for="half">Half</label><select id="half"><option value="bottom">bottom</option><option value="top">top (upside down)</option></select></div>
+        </div>
+        <div class="fld" id="slabOpts"><label for="slabType">Slab position</label><select id="slabType"><option value="bottom">bottom</option><option value="top">top</option><option value="double">double</option></select></div>
+      </div>
+      <div class="sec">
+        <h2>Elevation layer <small id="layerInfo"></small></h2>
+        <div class="layers" id="layers"></div>
+        <div class="gridwrap" id="gridwrap"><canvas id="grid"></canvas></div>
+      </div>
+      <div class="sec">
+        <h2>Blocks</h2>
+        <input type="text" id="pSearch" placeholder="Filter blocks" aria-label="Filter blocks">
+        <div class="palette" id="palette"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

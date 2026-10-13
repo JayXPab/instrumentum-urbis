@@ -1,0 +1,118 @@
+# Instrumentum Urbis
+
+A tool for bulk-generating unique Minecraft building facades for city building.
+The full concept is in `docs/concept.pdf`. This file records the decisions made
+since then and how the code is organised. Claude Code reads it at the start of
+every session, so keep it up to date when a design decision changes.
+
+## About the owner
+
+The project owner is new to programming. When working on this project:
+
+- Explain changes in plain language: what changed, why, and how to try it.
+- Work in small steps that can be tried in the browser after each one.
+- Before a large change, describe the plan and wait for approval.
+- Commit after each working step with a clear message, so any step can be undone.
+- Run `npm test` before committing. Add tests for any new rule in `src/core`.
+
+## Running it
+
+```
+npm install      # first time only, and after dependencies change
+npm run dev      # start the editor at http://localhost:5173
+npm test         # run the core tests
+npm run build    # production build into dist/
+```
+
+## Tech stack
+
+- Plain JavaScript (ES modules), built with Vite. Moving to TypeScript is planned
+  once the core model settles; JSDoc types are used meanwhile.
+- three.js for the 3D view.
+- Node's built-in test runner for tests (no test framework dependency).
+- Planned: wrap as a desktop app with Tauri; later, a Java mod (Fabric) like Axiom.
+
+## Code layout
+
+```
+index.html            page markup
+src/main.js           entry point
+src/styles.css        styles (colour tokens on :root, dark mode via prefers-color-scheme)
+src/core/             the facade rules: NO DOM, NO three.js
+  blocks.js           block catalogue, block-state parsing ("id[prop=value]")
+  facade.js           coordinates, bounds, mirror rule, variants, validation
+  assemble.js         stacking stages into a building, party walls, combination count
+  sample.js           the sample facade the editor opens with
+src/ui/               everything that touches the screen
+  app.js              editor state, 3D view, elevation grid, panels, undo
+  meshes.js           block-state -> three.js meshes, guide lines, labels
+tests/core.test.js    tests for src/core
+docs/concept.pdf      original concept document
+```
+
+Keep `src/core` free of browser and three.js code. It is the part that will be
+ported to Java for the mod, and the part the tests cover.
+
+## Coordinate system (relative to the Core Wall)
+
+- **x**: across the facade. Left is −x, right is +x. x = 0 is the centre column.
+  - Odd width: x runs −w/2 … +w/2 and the mirror axis passes through x = 0.
+  - Even width: x = 0 is the **right-hand block of the middle two**. The range is
+    −w/2 … w/2 − 1 and the mirror axis sits at x = −0.5.
+- **y**: up. Each stage starts at y = 0.
+- **z**: 0 is the Core Wall. +z is ornament in front of the wall, −z is
+  recesses (windows, curtains, doors) behind it. +z points away from the
+  building toward the street, which is south in Minecraft.
+
+## Design decisions
+
+- **Stages**: Base, Body, Capital. Each stage has any number of variants.
+  All variants in a stage share that stage's floor height.
+- **Floors**: minimum 3 (one base, one body, one capital). Extra floors repeat
+  the body. Within one building, every body floor is the **same variant**;
+  variety comes between buildings, not between floors.
+- **Combinations** = bases × bodies × capitals × floor counts in range.
+- **Depth rule**: a facade is never thicker than its width. Front depth and back
+  depth must each be ≤ xMax (half the width). The editor enforces this.
+- **Party walls**: for buildings that stand wall to wall, the side walls (outer
+  columns) and back wall are filled from a user-chosen block palette with
+  weights. They only fill cells the facade leaves empty. A seed makes the result
+  repeatable.
+- **Corners** (not built yet):
+  - Sharp corner: two perpendicular facades whose Core Walls meet, sharing
+    exactly one vertical column. Inner faces face inward, outer faces outward.
+  - Chamfered corner: an extra wall at 45°.
+  - Collisions at a corner: first try to **merge** the features (two stairs
+    become a corner stair). If they can't merge, **trim both walls** so they
+    form a clean corner.
+- **Minecraft version** is chosen first; only Java 1.21.11 for now. Block names
+  and states must come from the chosen version.
+- **Block states** are stored as strings like
+  `minecraft:stone_brick_stairs[facing=north,half=top]`. Stair `facing` is the
+  side the tall half is on.
+
+## Project file
+
+The editor saves the project in the browser (localStorage key
+`instrumentum-urbis.project.v1`) and can copy or load it as JSON. The JSON has
+`format: "instrumentum-urbis/facade"` and `formatVersion: 1`. If the shape
+changes, bump `formatVersion` and keep loading older files.
+
+## Roadmap
+
+1. ✅ Data model
+2. ✅ 3D viewer
+3. ✅ Stage editor (3D clicking + elevation grid, mirror, undo)
+4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
+5. ⬜ Export WorldEdit `.schem` (Sponge schematic, gzipped NBT). Then Litematica
+   `.litematic` and Axiom `.bp`.
+6. ⬜ Combination generator with bulk export ("all combinations" warns above a limit)
+7. ⬜ Corners: sharp, then chamfered, with the merge/trim rule
+8. ⬜ Roofs: gable, mansard, convex mansard, sloped; roof block and gradients
+9. ⬜ Schematic import (user defines the Core Wall; validate and recentre x = 0)
+10. ⬜ Desktop app (Tauri); later the in-game mod
+
+## Known limits
+
+- Blocks are drawn as flat colours, not textures. Stair and pane shapes are simplified.
+- Downloads aren't built yet; the project travels as copied JSON.

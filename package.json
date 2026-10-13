@@ -1,0 +1,22 @@
+{
+  "name": "instrumentum-urbis",
+  "version": "0.1.0",
+  "description": "Bulk generator of unique Minecraft building facades for city building.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
