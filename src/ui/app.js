@@ -21,7 +21,8 @@ import { ZipWriter } from "../core/zip.js";
 import { roofDefaults, SLOPED } from "../core/roof.js";
 import { typeList, TYPE_NAMES } from "../core/corner.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
-import { isDesktop, chooseFolder, findModFolders, saveFile, loadFolders, saveFolders } from "./desktop.js";
+import { isDesktop, chooseFolder, findModFolders, saveFile, loadFolders, saveFolders, findGameJars, extractAssets, chooseJar } from "./desktop.js";
+import { initTextures, reloadTextures, textureInfo, blockSwatch, swatchNow } from "./textures.js";
 
 /* ============================================================
    STATE
@@ -539,6 +540,14 @@ function renderLayers() {
   }
   $("layerInfo").textContent = zLabel(ui.layer);
 }
+/** Paints a palette swatch with the block's real texture, once it's known. */
+function showSwatch(sw, id, still = () => true) {
+  // Animated textures are tall strips of frames: show the first, square, frame.
+  const paint = (u) => { if (u && still()) { sw.style.background = `url("${u}") top / 100% auto no-repeat`; sw.classList.add("tex"); } };
+  const now = swatchNow(id);
+  if (now !== undefined) paint(now);
+  else blockSwatch(id).then(paint);
+}
 function renderPalette() {
   const box = $("palette"), f = ui.filter.toLowerCase();
   box.innerHTML = "";
@@ -555,6 +564,7 @@ function renderPalette() {
       bt.setAttribute("aria-pressed", String(b.id === ui.block));
       bt.title = b.id;
       bt.innerHTML = `<span class="sw" style="background:${b.color};opacity:${b.opacity < 1 ? 0.7 : 1}"></span><span>${b.name}</span>`;
+      showSwatch(bt.firstChild, b.id);
       bt.onclick = () => { ui.block = b.id; if (ui.tool !== "place") setTool("place"); renderPalette(); renderCurrent(); };
       gd.appendChild(bt);
     }
@@ -566,6 +576,8 @@ function renderPalette() {
 function renderCurrent() {
   const b = BMAP[ui.block];
   $("curSw").style.background = b.color;
+  $("curSw").classList.remove("tex");
+  showSwatch($("curSw"), b.id, () => ui.block === b.id);
   $("curName").textContent = b.name;
   $("curState").textContent = currentState();
   $("stairOpts").hidden = b.shape !== "stairs";
@@ -750,7 +762,58 @@ numInput("hBody", (n) => { P.heights.body = clamp(n, 2, 24); });
 numInput("hCap", (n) => { P.heights.capital = clamp(n, 1, 24); });
 $("coreBlock").innerHTML = BLOCKS.filter((b) => b.shape === "cube").map((b) => `<option value="${b.id}">${b.name}</option>`).join("");
 $("coreBlock").onchange = (e) => { P.coreBlock = e.target.value; save(); };
-$("mcVersion").onchange = (e) => { P.mcVersion = e.target.value; save(); };
+$("mcVersion").onchange = (e) => { P.mcVersion = e.target.value; save(); startTextures(); };
+
+/* ---------- Minecraft textures (desktop app) ---------- */
+/** Checks this version's game files, then redraws what uses them. */
+async function startTextures() {
+  await initTextures(P.mcVersion);
+  renderTextures();
+  renderPalette();
+  renderCurrent();
+}
+function renderTextures() {
+  $("texSec").hidden = !isDesktop;
+  if (!isDesktop) return;
+  const info = textureInfo();
+  $("texStatus").innerHTML = info
+    ? `Using textures from <span class="fpath">${escapeHtml(info.jar)}</span> (${info.files.toLocaleString()} files).`
+    : `No game files for Java ${escapeHtml(P.mcVersion)} yet, so blocks are drawn in flat colours. Use <b>Find Minecraft</b>, then pick one.`;
+}
+/** Copies the files out of a game jar and starts using them. */
+async function useJar(jar) {
+  $("texFind").disabled = $("texChoose").disabled = true;
+  $("texStatus").textContent = "Reading the game jar… (a few seconds)";
+  try {
+    const info = await extractAssets(P.mcVersion, jar);
+    await reloadTextures();
+    toast(`Textures ready: ${info.files.toLocaleString()} files from the game jar`);
+  } catch (e) {
+    toast(String(e));
+  }
+  $("texFind").disabled = $("texChoose").disabled = false;
+  $("texFound").innerHTML = "";
+  renderTextures();
+  renderPalette();
+  renderCurrent();
+}
+let jars = [];
+$("texFind").onclick = async () => {
+  try { jars = await findGameJars(P.mcVersion); } catch (e) { jars = []; toast(String(e)); }
+  $("texFound").innerHTML = !jars.length
+    ? `<p class="lbl" style="margin:0">No game jar for Java ${escapeHtml(P.mcVersion)} found. Start this version once in your launcher (it downloads the jar), or use Choose game jar….</p>`
+    : `<div class="found">${jars.map((j, i) => `
+        <div class="fitem"><div><b>${escapeHtml(j.launcher)}</b><div class="fpath">${escapeHtml(j.path)}</div></div>
+          <button class="btn small" data-jar="${i}">${textureInfo()?.jar === j.path ? "Read again" : "Use"}</button></div>`).join("")}</div>`;
+};
+$("texFound").onclick = (e) => {
+  const b = e.target.closest("button[data-jar]");
+  if (b) useJar(jars[+b.dataset.jar].path);
+};
+$("texChoose").onclick = async () => {
+  const jar = await chooseJar();
+  if (jar) useJar(jar);
+};
 
 document.querySelectorAll(".stagetabs button").forEach((b) => (b.onclick = () => { ui.stage = b.dataset.stage; renderVariants(); render3D(); renderGrid(); fitView(); }));
 $("newVar").onclick = () => {
@@ -1624,4 +1687,5 @@ export function start() {
   resize(); syncInputs(); renderLayers(); renderPalette(); renderCurrent(); setTool("place");
   renderVariants(); renderChecks(); renderBuildPanel(); render3D(); renderGrid(); fitView();
   renderFolders();
+  startTextures();
 }

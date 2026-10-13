@@ -40,6 +40,17 @@
         <button class="btn danger" id="resetSample">Reset to sample facade</button>
       </div>
     </div>
+    <!-- Desktop app only: shown when running in the Tauri window -->
+    <div class="sec" id="texSec" style="padding:12px 0 0;border:0;border-top:1px solid var(--line)" hidden>
+      <h2>Minecraft textures</h2>
+      <p class="lbl" style="margin:0">The editor can show blocks with their real textures, read from your own copy of Minecraft (the game jar every launcher keeps). Nothing is shipped with the app, and nothing leaves your computer.</p>
+      <p id="texStatus" style="margin:0"></p>
+      <div class="acts">
+        <button class="btn" id="texFind">Find Minecraft</button>
+        <button class="btn" id="texChoose">Choose game jar…</button>
+      </div>
+      <div id="texFound"></div>
+    </div>
   </section>
 
   <main class="work">

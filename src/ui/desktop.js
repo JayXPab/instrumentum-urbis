@@ -40,3 +40,19 @@ export function loadFolders() {
 export function saveFolders(f) {
   try { localStorage.setItem(KEY, JSON.stringify(f)); } catch (e) { /* storage unavailable */ }
 }
+
+/* ---------- Minecraft's own files (textures, models) ---------- */
+/** Game jars for this Minecraft version found on this computer: [{ launcher, path }]. */
+export const findGameJars = (version) => invoke("find_game_jars", { version });
+/** What was copied from a game jar for this version: { jar, files }, or null. */
+export const assetsStatus = (version) => invoke("assets_status", { version });
+/** Copies the block textures, models and blockstates out of a game jar: { jar, files }. */
+export const extractAssets = (version, jar) => invoke("extract_assets", { version, jar });
+/** One copied file's bytes, e.g. "textures/block/bricks.png". */
+export const readAsset = (version, path) => invoke("read_asset", { version, path });
+
+/** Opens the Windows file picker for a game jar. Returns the chosen file, or null. */
+export async function chooseJar() {
+  const f = await open({ title: "Choose the Minecraft game jar", filters: [{ name: "Minecraft game jar", extensions: ["jar"] }] });
+  return typeof f === "string" ? f : null;
+}

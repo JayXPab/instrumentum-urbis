@@ -81,14 +81,18 @@ src/core/             the facade rules: NO DOM, NO three.js
   corner.js           corner buildings: turned side facade, merge/trim, chamfer
   colour.js           colour variants: white slot blocks, main and base colours
   import.js           reading .schem/.litematic/.bp; turning blocks into variants
+  models.js           Minecraft's blockstates/models: pick a model, follow parents,
+                      find textures (editor drawing only; the mod won't need it)
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
-  desktop.js          desktop-only calls (folder picker, find/save files); folder settings
+  desktop.js          desktop-only calls (folder picker, find/save files, game files); folder settings
+  textures.js         block textures from the copied game files: swatches, picture URLs, caches
 src-tauri/             desktop app shell (Rust): window, settings, later file access
   tauri.conf.json     app name, window size, which commands build the editor
   src/lib.rs          the Rust program; registers plugins and commands
   src/folders.rs      finding mod folders in launchers; saving files into folders
+  src/assets.rs       finding the game jar; copying block textures/models out; reading them
   .cargo/config.toml  2 build jobs (the laptop ran out of memory)
   capabilities/       what the editor page is allowed to ask Rust to do
 vite.config.js        dev server on port 5173 (the desktop app expects it)
@@ -279,6 +283,27 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   height" (trim/pad its other variants). Padding rows are Core Wall blocks.
 - Not supported: MCEdit `.schematic` (pre-1.13) and Structure Block `.nbt`.
 
+## Minecraft textures (desktop app)
+
+- Read from the user's own **game jar** (`<version>.jar`, a zip every launcher
+  keeps); never shipped. Project → Minecraft textures: **Find Minecraft** looks
+  for the jar of the chosen version in the official `.minecraft\versions`,
+  Modrinth `meta\versions`, CurseForge `Install\versions`, Prism/PolyMC
+  `libraries\com\mojang\minecraft`, ATLauncher and FTB; **Choose game jar…**
+  for anything else.
+- **Use** copies `assets/minecraft/` `textures/block`, `models/block`,
+  `blockstates` and `textures/colormap` into the app's local data folder
+  (`<AppData>\Local\io.github.jayxpab.instrumentumurbis\minecraft\<version>\`,
+  with `source.json` saying which jar). The jar is only read. After that the
+  app reads those copies (`read_asset`), so the jar may move or update freely.
+- A block's texture: blockstate → variant (stored properties must match;
+  missing ones match anything; the first of a random list) → model → parents
+  (child textures win, nearest elements win) → `#refs`. The palette swatch
+  takes `all`, `side`, `texture`, `cross`, `pane`, … in that order.
+- Without copied files, or in the browser, blocks stay flat colours.
+- Not yet: tinted textures (grass tops, leaves) show grey; the 3D view still
+  uses flat colours (roadmap 10.4).
+
 ## Project file
 
 The editor saves the project in the browser (localStorage key
@@ -313,8 +338,10 @@ need a bump.
     2. ✅ Save to folders: a folder per format, Find game folders picks a
        whole profile across launchers, bulk export as loose files (checked on
        Windows with Modrinth).
-    3. ⬜ Find the user's Minecraft installation and read block textures from it
-       (the tool must not ship Mojang's assets).
+    3. 🔶 Game files: find the game jar across launchers, copy block
+       textures/models/blockstates out once, palette and current-block
+       swatches show real textures. Built and tested in the Linux app with a
+       pretend jar (awaiting a Windows check with the real 1.21.11 jar).
     4. ⬜ Draw blocks with textures, then with their real models.
     5. ⬜ Windows installer and app icon.
 11. ⬜ In-game mod (Fabric).
@@ -325,6 +352,8 @@ need a bump.
 - Blocks outside the catalogue (doors, shelves, lanterns… e.g. from imports) are
   kept and exported exactly, but the 3D view shows them as magenta placeholder
   cubes. To be fixed with real models in the desktop app (see roadmap 10).
+- Cloud sessions can't download Mojang's files (blocked), so texture tests use
+  a pretend jar with the same layout.
 - Testing the desktop app in a cloud session: `npx tauri build --debug --no-bundle`,
   then drive it with `tauri-driver` (cargo install) and `WebKitWebDriver`
   (apt `webkit2gtk-driver`) under `xvfb-run`; WebDriver on port 4444.
