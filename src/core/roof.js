@@ -15,8 +15,8 @@
 // with full blocks underneath down to the lower neighbour, so the roof
 // has no holes. The triangular ends are filled ("gable" / "party").
 
-import { bounds, uid } from "./facade.js";
-import { buildingDepth } from "./assemble.js";
+import { uid } from "./facade.js";
+import { plot, chosenDepth } from "./assemble.js";
 import { MMAP, MATERIALS, makeState } from "./blocks.js";
 import { cornerOf, outsideChamfer, stairFromQuarters, halfOf } from "./corner.js";
 
@@ -36,11 +36,8 @@ export const EDGE_MIN = -3, EDGE_MAX = 2;
  *   p: 0 at the eaves .. 1 at the ridge, for the material gradient
  */
 
-/** The roof's footprint: the building from the Core Wall back, side wall to side wall. */
-export function footprint(p) {
-  const b = bounds(p);
-  return { xMin: b.xMin, xMax: b.xMax, zMin: -(buildingDepth(p) - 1), zMax: 0 };
-}
+/** The roof's footprint: the building's plot, from the Core Wall back, side wall to side wall. */
+export const footprint = (p) => plot(p);
 
 /**
  * Height of the outline at a cell, before rounding.
@@ -258,48 +255,57 @@ export function roofBlocks(p, style, y0, rnd, party = () => null) {
 }
 
 /* ---------- corner roofs ---------- */
-// A corner building is square with streets on two sides. Sloped roofs become
-// a height field over the footprint: the lower of two outlines, one across x
-// and one across z.
-//   gable, mansard, convex: slopes on all four sides meeting at hip lines (hipped roof)
-//   sloped: down toward both streets, high at the inner back corner
-// Edge (overhang/inset) applies on the two street sides only.
-// Worked out for a right corner; a left corner mirrors it.
+// A corner roof joins the mid-row roofs on both streets. It is L-shaped: one
+// wing carries on the roof of the buildings along the front street (an
+// outline across z), the other the roof along the side street (across x).
+// Both wings use the mid-row outline for the chosen depth and edge, so they
+// line up exactly. Where they cross, the outer corner gets a hip and the
+// inner corner a valley:
+//   front wing  min(f(a), r(b))     a: blocks back from the front eave
+//   side wing   min(f(b), r(a))     b: blocks in from the side-street eave
+//   roof        the higher of the two
+// f is the mid-row outline; r is its rising half, held at the top beyond the
+// ridge. A plot deeper than both wings gets a flat patch in the inner back corner.
 
 function cornerRoofShape(p, style, corner) {
-  const pieces = rightCornerRoof(p, style, corner.chamfer);
-  if (corner.side === "right") return pieces;
-  const b = bounds(p), m = b.xMin + b.xMax;
-  const flipEW = { east: "west", west: "east" };
-  return pieces.map((c) => ({
-    ...c,
-    x: m - c.x,
-    ...(c.facing ? { facing: flipEW[c.facing] || c.facing } : {}),
-    ...(c.shape ? { shape: c.shape.replace(/left|right/, (s) => (s === "left" ? "right" : "left")) } : {}),
-  }));
+  return lRoof(p, style, corner.chamfer);
 }
 
 const DIRS = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
 const DIAG = { NE: [1, -1], NW: [-1, -1], SE: [1, 1], SW: [-1, 1] };
 
-function rightCornerRoof(p, style, chamfer) {
+function lRoof(p, style, chamfer) {
   const f = footprint(p);
   const cut = (x, z) => outsideChamfer(p, chamfer, x, z);
   if (style.type === "flat" || style.type === "garden") return flatShape(f, style, cut);
   if (!SLOPED.has(style.type)) return [];
 
   const e = Math.max(EDGE_MIN, Math.min(EDGE_MAX, Math.round(style.edge || 0)));
-  const x0 = f.xMin, x1 = f.xMax + e, z0 = f.zMin, z1 = f.zMax + e;
-  const nx = x1 - x0 + 1, nz = z1 - z0 + 1;
-  if (nx < 1 || nz < 1) return [];
+  const D = chosenDepth(p); // the mid-row depth this corner joins
+  const n = D + 2 * e; // a wing's width, eave to eave, as on a mid-row building
+  if (n < 1) return [];
   const H = Math.max(1, style.height || 1);
+
+  // The mid-row outline, indexed by distance from the street eave (mid-row
+  // buildings count from the back, so read it the other way round).
+  const fa = Array.from({ length: n }, (_, a) => outline(style.type, n - 1 - a, n, H, !!style.flip));
+  const peak = fa.indexOf(Math.max(...fa));
+  const rise = (t) => (t < peak ? fa[t] : fa[peak]);
 
   /** Top of the roof in each column, to the half block. */
   const q = new Map();
-  for (let x = x0; x <= x1; x++)
-    for (let z = z0; z <= z1; z++) {
+  for (let x = f.xMin; x <= f.xMax + e; x++)
+    for (let z = f.zMin; z <= f.zMax + e; z++) {
       if (cut(x, z)) continue;
-      q.set(x + "," + z, half(Math.min(outline(style.type, x - x0, nx, H), outline(style.type, z - z0, nz, H))));
+      const a = e - z, b = f.xMax + e - x;
+      if (a < 0 || b < 0) continue; // inset: the roof starts inside the walls
+      const front = a < n ? Math.min(fa[a], rise(b)) : -1;
+      const side = b < n ? Math.min(fa[b], rise(a)) : -1;
+      const h = Math.max(front, side);
+      if (h >= 0) q.set(x + "," + z, half(h));
+      // Deeper than the mid-row buildings on both streets (a plot wider than the
+      // depth): a flat patch at the eaves. An inset ledge stays open, as on mid-row.
+      else if (-z >= D && f.xMax - x >= D) q.set(x + "," + z, 0.5);
     }
   const Q = (x, z) => q.get(x + "," + z) ?? 0;
   // Beyond the inner side and back walls are the neighbours: count them as level with
@@ -320,8 +326,10 @@ function rightCornerRoof(p, style, chamfer) {
     if (h - k === 0.5) { piece(x, k, z, "slab"); continue; }
     const higher = near.filter(([, t]) => t > h).map(([d]) => d);
     const lower = near.some(([, t]) => t < h);
+    // In a valley the sides are level or higher; only the diagonal between them drops.
+    const lowerDiag = Object.values(DIAG).some(([dx, dz]) => !beyond(x + dx, z + dz) && Q(x + dx, z + dz) < h);
     let st = null;
-    if (lower && higher.length) st = stairFromQuarters(new Set(higher.flatMap(halfOf)));
+    if ((lower || lowerDiag) && higher.length) st = stairFromQuarters(new Set(higher.flatMap(halfOf)));
     else if (lower) {
       // On a hip line: no side is higher, but a diagonal is. That's an outer corner.
       const up = Object.entries(DIAG).filter(([, [dx, dz]]) => Q(x + dx, z + dz) > h).map(([qd]) => qd);
@@ -331,7 +339,8 @@ function rightCornerRoof(p, style, chamfer) {
     else piece(x, k, z, "block");
   }
 
-  // The inner side wall and the back wall are party walls: close the space under a high roof edge.
+  // The inner side wall and the back wall are party walls: close the space under the roof there,
+  // as on the gable end of a mid-row building.
   for (const [key, h] of q) {
     const [x, z] = key.split(",").map(Number);
     if (!(x === f.xMin || z === f.zMin) || x > f.xMax || z > f.zMax) continue;

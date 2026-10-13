@@ -8,7 +8,7 @@ import {
   STAGES, STAGE_NAMES, K, unK, uid, clamp, bounds, mirrorX, axisX,
   newVariant, pruneAll, checks, validProject,
 } from "../core/facade.js";
-import { assemble, comboCount, buildingDepth, minDepth } from "../core/assemble.js";
+import { assemble, comboCount, buildingDepth, minDepth, plot } from "../core/assemble.js";
 import { upgradeProject } from "../core/project.js";
 import { sampleProject } from "../core/sample.js";
 import { toSchem, schemName } from "../core/schem.js";
@@ -16,7 +16,7 @@ import { blueprintParts, packBlueprint } from "../core/blueprint.js";
 import { bulkDefaults, bulkCount, chooseCombos, forCombo, indexCsv } from "../core/bulk.js";
 import { ZipWriter } from "../core/zip.js";
 import { roofDefaults, SLOPED } from "../core/roof.js";
-import { typeList, TYPE_NAMES, cornerOf } from "../core/corner.js";
+import { typeList, TYPE_NAMES } from "../core/corner.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
 
 /* ============================================================
@@ -211,7 +211,8 @@ function render3D() {
     helpers.add(lbl);
   } else {
     const A = assemble(P);
-    $("viewtag").innerHTML = `${A.floors} floors <small>${P.width} × ${A.top} × ${buildingDepth(P)}</small>`;
+    const lot = plot(P);
+    $("viewtag").innerHTML = `${A.floors} floors <small>${lot.xMax - lot.xMin + 1} × ${A.top} × ${buildingDepth(P)}</small>`;
     for (const [k, c] of A.cells) {
       const [x, y, z] = unK(k);
       const faded = ui.fade && c.kind === "body" && c.copy > 0;
@@ -622,10 +623,7 @@ function renderBuildPanel() {
   $("comboN").textContent = n.toLocaleString();
   const roofs = P.roofs.length ? ` × ${P.roofs.length} roof${P.roofs.length === 1 ? "" : "s"}` : "";
   const nd = Math.max(0, P.depthMax - P.depthMin + 1);
-  const corners = types.filter((t) => t !== "mid").length;
-  const cornerText = `${corners} corner type${corners === 1 ? "" : "s"}`;
-  const depths = !corners ? (nd > 1 ? ` × ${nd} depths` : "")
-    : types.includes("mid") ? ` × (${nd} mid-row depth${nd === 1 ? "" : "s"} + ${cornerText})` : ` × ${cornerText}`;
+  const depths = (nd > 1 ? ` × ${nd} depths` : "") + (types.length > 1 ? ` × ${types.length} building types` : "");
   $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}${depths}`;
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
@@ -855,16 +853,13 @@ $("dlBp").onclick = async () => {
 function renderTypes() {
   const t = P.types;
   $("tyMid").checked = t.mid;
-  $("tyLeft").checked = t.left;
-  $("tyRight").checked = t.right;
+  $("tyCornerOn").checked = t.corner;
   $("tySharp").checked = t.sharp;
   $("tyChamfered").checked = t.chamfered;
   $("tyChamfer").value = t.chamfer;
   $("tyChamferVal").textContent = `${t.chamfer} block${t.chamfer === 1 ? "" : "s"}`;
-  $("tyCorner").hidden = !(t.left || t.right);
+  $("tyCorner").hidden = !t.corner;
   $("tyChamferFld").hidden = !t.chamfered;
-  // The depth slider only matters for mid-row buildings.
-  if (cornerOf(P)) $("depthFld").hidden = true;
 }
 /** Tick boxes: keep at least one building type, and at least one corner style when corners are on. */
 const typeTick = (id, key, group, msg) => {
@@ -879,10 +874,9 @@ const typeTick = (id, key, group, msg) => {
     save(); renderBuildPanel(); render3D(); fitView();
   };
 };
-const KINDS = ["mid", "left", "right"], STYLES = ["sharp", "chamfered"];
+const KINDS = ["mid", "corner"], STYLES = ["sharp", "chamfered"];
 typeTick("tyMid", "mid", KINDS, "Keep at least one building type.");
-typeTick("tyLeft", "left", KINDS, "Keep at least one building type.");
-typeTick("tyRight", "right", KINDS, "Keep at least one building type.");
+typeTick("tyCornerOn", "corner", KINDS, "Keep at least one building type.");
 typeTick("tySharp", "sharp", STYLES, "Keep sharp or chamfered ticked for corner buildings.");
 typeTick("tyChamfered", "chamfered", STYLES, "Keep sharp or chamfered ticked for corner buildings.");
 let chamferDrag = false;

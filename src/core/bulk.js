@@ -2,13 +2,12 @@
 // which ones a bulk export includes. Pure functions, no DOM, no three.js.
 //
 // A combination is one base, one body and one capital variant and one roof
-// style (by index), a floor count, and a building type (mid-row or a corner)
-// with a depth (mid-row only: corner buildings are square). With no roof styles, roof is 0 and the
+// style (by index), a floor count, a depth, and a building type (mid-row or corner). With no roof styles, roof is 0 and the
 // building has a flat top. Each gets its own party-wall seed, worked out from the
 // project's bulk seed, so exporting again gives exactly the same buildings.
 
-import { comboCount, mulberry32, buildingDepth } from "./assemble.js";
-import { typeList, TYPE_NAMES } from "./corner.js";
+import { comboCount, mulberry32, chosenDepth } from "./assemble.js";
+import { typeList, TYPE_NAMES, OLD_TYPES } from "./corner.js";
 
 /** @typedef {{base:number, body:number, capital:number, roof:number, floors:number, depth:number, type:string}} Combo */
 
@@ -16,8 +15,7 @@ import { typeList, TYPE_NAMES } from "./corner.js";
 export const bulkDefaults = () => ({ format: "bp", amount: null, random: false, seed: 1, limit: 200 });
 
 /**
- * The i-th combination, counting floors fastest, then type-and-depth, roof, capital, body, base.
- * Type-and-depth runs through every mid-row depth first, then each corner type.
+ * The i-th combination, counting floors fastest, then depth, type, roof, capital, body, base.
  * @returns {Combo}
  */
 export function comboAt(p, i) {
@@ -25,13 +23,10 @@ export function comboAt(p, i) {
   const nc = p.stages.capital.length, nb = p.stages.body.length;
   const nr = Math.max(1, (p.roofs || []).length);
   const types = typeList(p);
-  const midDepths = types.includes("mid") ? Math.max(0, p.depthMax - p.depthMin + 1) : 0;
-  const corners = types.filter((t) => t !== "mid");
-  const ns = Math.max(1, midDepths + corners.length);
+  const nd = Math.max(1, p.depthMax - p.depthMin + 1);
   const floors = p.floorMin + (i % r); i = Math.floor(i / r);
-  const slot = i % ns; i = Math.floor(i / ns);
-  const type = slot < midDepths ? "mid" : corners[slot - midDepths];
-  const depth = slot < midDepths ? p.depthMin + slot : p.depthMin;
+  const depth = p.depthMin + (i % nd); i = Math.floor(i / nd);
+  const type = types[i % types.length]; i = Math.floor(i / types.length);
   const roof = i % nr; i = Math.floor(i / nr);
   const capital = i % nc; i = Math.floor(i / nc);
   const body = i % nb; i = Math.floor(i / nb);
@@ -106,7 +101,7 @@ export function indexCsv(rows) {
   const lines = rows.map(({ file, p, blocks }) => {
     const a = p.assembly;
     const roof = p.roofs?.length ? p.roofs[a.roof].name : "";
-    return [file, TYPE_NAMES[a.type || "mid"], p.stages.base[a.base].name, p.stages.body[a.body].name, p.stages.capital[a.capital].name, roof, a.floors, buildingDepth(p), a.seed, blocks]
+    return [file, TYPE_NAMES[OLD_TYPES[a.type] || a.type || "mid"], p.stages.base[a.base].name, p.stages.body[a.body].name, p.stages.capital[a.capital].name, roof, a.floors, chosenDepth(p), a.seed, blocks]
       .map(csv).join(",");
   });
   return [head.join(","), ...lines].join("\r\n") + "\r\n";

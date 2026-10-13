@@ -211,25 +211,52 @@ const tops = (pieces) => {
   return m;
 };
 
-test("on a corner building a gable becomes a hipped roof: eaves on all four sides", () => {
-  const p = cornerP("cr");
-  const t = tops(roofShape(p, style({ height: 4 })));
+/** Roof heights of the mid-row building of the same depth, across z (they don't vary along x). */
+const midProfile = (p, st) => {
+  const m = structuredClone(p);
+  m.assembly.type = "mid";
+  const t = tops(roofShape(m, st));
+  return (z) => t.get("0," + z);
+};
+
+test("a corner roof lines up with the mid-row roofs on both streets", () => {
+  for (const [type, height, edge, depth] of [["gable", 4, 0, 9], ["gable", 4, 1, 9], ["mansard", 6, 0, 11], ["convex", 6, 1, 9], ["gable", 5, -1, 12]]) {
+    const p = cornerP("c");
+    p.depthMin = 3; p.depthMax = 20; p.assembly.depth = depth;
+    const st = style({ type, height, edge });
+    const t = tops(roofShape(p, st));
+    const mid = midProfile(p, st);
+    const f = footprint(p);
+    const label = `${type} h${height} edge ${edge} depth ${depth}`;
+    // Front street: the corner's inner edge matches its neighbour's cross-section
+    for (let z = f.zMin; z <= f.zMax + edge; z++) assert.equal(t.get(f.xMin + "," + z), mid(z), label + " front z " + z);
+    // Side street: the back edge matches the side neighbour (the same roof, turned)
+    for (let x = f.xMin; x <= f.xMax + edge; x++) {
+      const a = f.xMax + edge - x; // blocks in from the side-street eave
+      if (a >= depth + 2 * edge) continue;
+      assert.equal(t.get(x + "," + f.zMin), mid(edge - a), label + " side x " + x);
+    }
+  }
+});
+
+test("where the two wings meet: a hip outside, a valley inside", () => {
+  const p = cornerP("c");
+  // 9 high over 9 deep: two blocks up per step, so the hip and valley are stairs, not slabs
+  const pieces = roofShape(p, style({ height: 9 }));
+  assert.ok(pieces.some((c) => c.part === "stairs" && /^outer/.test(c.shape)), "hip: outer corner stairs");
+  assert.ok(pieces.some((c) => c.part === "stairs" && /^inner/.test(c.shape)), "valley: inner corner stairs");
+});
+
+test("a plot wider than the depth gets a flat patch in its inner back corner", () => {
+  const p = cornerP("c");
+  p.depthMin = 5; p.depthMax = 5; p.assembly.depth = 5; // plot stays 7 wide
+  const t = tops(roofShape(p, style({ height: 3 })));
   const f = footprint(p);
-  assert.equal(f.zMax - f.zMin + 1, p.width, "square footprint");
-  for (let i = f.xMin; i <= f.xMax; i++) {
-    assert.equal(t.get(i + "," + f.zMax), 0.5, "front eave");
-    assert.equal(t.get(i + "," + f.zMin), 0.5, "back eave");
-  }
-  for (let z = f.zMin; z <= f.zMax; z++) {
-    assert.equal(t.get(f.xMin + "," + z), 0.5, "inner eave");
-    assert.equal(t.get(f.xMax + "," + z), 0.5, "side-street eave");
-  }
-  assert.equal(Math.max(...t.values()), 4);
-  assert.ok(roofShape(p, style({ height: 4 })).some((c) => c.part === "stairs" && /^outer/.test(c.shape)), "hip lines use outer corner stairs");
+  assert.equal(t.get(f.xMin + "," + f.zMin), 0.5);
 });
 
 test("a sloped corner roof comes down toward both streets, high at the inner back corner", () => {
-  const p = cornerP("cr");
+  const p = cornerP("c");
   const f = footprint(p);
   const pieces = roofShape(p, style({ type: "sloped", height: 4 }));
   const t = tops(pieces);
@@ -239,7 +266,7 @@ test("a sloped corner roof comes down toward both streets, high at the inner bac
 });
 
 test("edge reaches out over both streets on a corner, never over the neighbours", () => {
-  const p = cornerP("cr");
+  const p = cornerP("c");
   const f = footprint(p);
   const xs = roofShape(p, style({ edge: 1 })).map((c) => c.x), zs = roofShape(p, style({ edge: 1 })).map((c) => c.z);
   assert.equal(Math.max(...xs), f.xMax + 1);
@@ -248,19 +275,8 @@ test("edge reaches out over both streets on a corner, never over the neighbours"
   assert.equal(Math.min(...zs), f.zMin);
 });
 
-test("a left corner roof mirrors the right one", () => {
-  const r = roofShape(cornerP("cr"), style({ type: "sloped", height: 4 }));
-  const l = roofShape(cornerP("cl"), style({ type: "sloped", height: 4 }));
-  const tr = tops(r), tl = tops(l);
-  for (const [k, h] of tr) {
-    const [x, z] = k.split(",").map(Number);
-    assert.equal(tl.get(-x + "," + z), h, "mirror of " + k);
-  }
-  assert.ok(l.filter((c) => c.part === "stairs" && c.facing === "east").length > 0, "stairs turned the other way");
-});
-
 test("a chamfered corner clips the roof along the diagonal; a garden wall follows it", () => {
-  const p = cornerP("cr-ch", 2);
+  const p = cornerP("c-ch", 2);
   const t = tops(roofShape(p, style({ height: 4 })));
   assert.ok(!t.has("3,0") && !t.has("2,0") && !t.has("3,-1"), "roof cut at the corner");
   const g = roofShape(p, { type: "garden" });

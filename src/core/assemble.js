@@ -4,7 +4,7 @@
 import { BMAP } from "./blocks.js";
 import { K, unK, bounds, clamp } from "./facade.js";
 import { roofBlocks } from "./roof.js";
-import { cornerOf, buildCorner, typeList, TYPE_NAMES } from "./corner.js";
+import { cornerOf, buildCorner, typeList } from "./corner.js";
 
 /** Small seeded random generator so a building can be regenerated exactly. */
 export function mulberry32(a) {
@@ -20,12 +20,23 @@ export function mulberry32(a) {
 /** Shallowest building the facade allows: its recesses plus a back wall. */
 export const minDepth = (p) => -bounds(p).zMin + 2;
 
+/** The chosen depth: assembly.depth within the depth range, never shallower than the facade allows. */
+export const chosenDepth = (p) => Math.max(clamp(p.assembly.depth ?? p.depthMin, p.depthMin, p.depthMax), minDepth(p));
+
 /**
- * Depth of the chosen building in blocks: assembly.depth within the depth range,
- * never shallower than the facade allows. Corner buildings are square: as deep as wide.
+ * Depth of the building in blocks, Core Wall to back wall. A corner plot is as
+ * deep as its mid-row neighbours on both streets, and never narrower than the facade.
  */
-export const buildingDepth = (p) =>
-  cornerOf(p) ? p.width : Math.max(clamp(p.assembly.depth ?? p.depthMin, p.depthMin, p.depthMax), minDepth(p));
+export const buildingDepth = (p) => (cornerOf(p) ? Math.max(chosenDepth(p), p.width) : chosenDepth(p));
+
+/**
+ * The building's plot, x and z. Mid-row: the facade's width. A corner plot is
+ * square and reaches inward (−x) from the corner column at xMax.
+ */
+export function plot(p) {
+  const b = bounds(p), d = buildingDepth(p);
+  return { xMin: cornerOf(p) ? b.xMax - d + 1 : b.xMin, xMax: b.xMax, zMin: -(d - 1), zMax: 0 };
+}
 
 /**
  * @typedef {{s:string, kind:"base"|"body"|"capital"|"party"|"roof", copy?:number}} Cell
@@ -67,7 +78,7 @@ export function assemble(p) {
   // Corner buildings: the same facade turned to face the side street as well.
   const corner = cornerOf(p);
   if (corner) {
-    const both = buildCorner(cells, p, corner);
+    const both = buildCorner(cells, p, corner, buildingDepth(p));
     cells.clear();
     for (const [k, c] of both) cells.set(k, c);
   }
@@ -88,16 +99,16 @@ export function assemble(p) {
   };
   if (tot > 0) {
     const pick = pickFrom(rnd);
-    const zBack = -(buildingDepth(p) - 1);
+    const lot = plot(p), zBack = lot.zMin;
     for (let y = 0; y < y0; y++) {
       for (let z = -1; z >= zBack; z--)
-        for (const x of [b.xMin, b.xMax]) {
+        for (const x of [lot.xMin, lot.xMax]) {
           // A corner building has its side facade here instead of a party wall.
-          if (corner && x === (corner.side === "right" ? b.xMax : b.xMin)) continue;
+          if (corner && x === lot.xMax) continue;
           const k = K(x, y, z);
           if (!cells.has(k)) cells.set(k, { s: pick(), kind: "party" });
         }
-      for (let x = b.xMin + 1; x < b.xMax; x++) {
+      for (let x = lot.xMin + 1; x < lot.xMax; x++) {
         const k = K(x, y, zBack);
         if (!cells.has(k)) cells.set(k, { s: pick(), kind: "party" });
       }
@@ -132,22 +143,19 @@ export function buildingTitle(p) {
   const n = (kind, i) => p.stages[kind][i]?.name ?? "?";
   const roof = roofOf(p);
   const corner = cornerOf(p);
-  const deep = !corner && p.depthMax > p.depthMin ? `, ${buildingDepth(p)} deep` : "";
-  const type = corner ? ", " + TYPE_NAMES[a.type].toLowerCase() : "";
+  const deep = p.depthMax > p.depthMin ? `, ${chosenDepth(p)} deep` : "";
+  const type = corner ? (corner.chamfer ? ", corner, chamfered" : ", corner") : "";
   return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors${deep}${type}`;
 }
 
 /**
- * Number of distinct buildings the project can make. Each mid-row building comes
- * in every depth of the range; corner buildings are square, so they have one depth.
- * slots = mid-row depths + corner types.
+ * Number of distinct buildings the project can make: every ticked building type
+ * (mid-row, corner, chamfered corner) in every depth of the range.
  */
 export function comboCount(p) {
   const r = Math.max(0, p.floorMax - p.floorMin + 1);
   const roofs = Math.max(1, (p.roofs || []).length);
   const depths = Math.max(0, p.depthMax - p.depthMin + 1);
-  const types = typeList(p);
-  const corners = types.filter((t) => t !== "mid").length;
-  const slots = (types.includes("mid") ? depths : 0) + corners;
-  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r * slots, r, roofs, depths, corners, slots };
+  const types = typeList(p).length;
+  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r * depths * types, r, roofs, depths, types };
 }

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { stairQuarters, stairFromQuarters, mergeStairs, cornerOf, outsideChamfer } from "../src/core/corner.js";
 import { rotateState, mirrorState, parseState } from "../src/core/blocks.js";
-import { assemble, buildingDepth } from "../src/core/assemble.js";
+import { assemble, buildingDepth, plot } from "../src/core/assemble.js";
 import { K, bounds } from "../src/core/facade.js";
 import { sampleProject } from "../src/core/sample.js";
 
@@ -55,9 +55,16 @@ test("two stairs merge: overlap gives an outer corner, joining gives an inner co
   assert.equal(mergeStairs(n, "minecraft:bricks", "union"), null);
 });
 
-test("a corner building is square, with one column shared by both facades", () => {
-  const p = corner("cr");
-  assert.equal(buildingDepth(p), p.width);
+test("a corner plot is as deep as its mid-row neighbours, and never narrower than the facade", () => {
+  const p = corner("c"); // sample depth 9, facade 7 wide
+  assert.equal(buildingDepth(p), 9);
+  assert.deepEqual(plot(p), { xMin: 3 - 8, xMax: 3, zMin: -8, zMax: 0 });
+  p.depthMin = 5; p.depthMax = 5; p.assembly.depth = 5;
+  assert.equal(buildingDepth(p), p.width, "a shallow depth still gets a facade-wide plot");
+});
+
+test("both facades share one corner column; extra length continues the facade's end column", () => {
+  const p = corner("c");
   const A = assemble(p);
   const b = bounds(p);
   const front = sampleProject(); // the same facade, mid-row
@@ -71,12 +78,18 @@ test("a corner building is square, with one column shared by both facades", () =
       const s = at(F, b.xMin + i, y, 0);
       assert.equal(at(A, b.xMax, y, -i), s && rotateState(s), `side ${i},${y}`);
     }
+    // Plot 9 deep, facade 7 wide: two more columns on each street
+    for (let i = 1; i <= 2; i++) {
+      assert.equal(at(A, b.xMin - i, y, 0), at(F, b.xMin, y, 0), `front carries on ${i},${y}`);
+      const s = at(F, b.xMax, y, 0);
+      assert.equal(at(A, b.xMax, y, -(p.width - 1) - i), s && rotateState(s), `side carries on ${i},${y}`);
+    }
   }
 });
 
 test("the side facade's ornament faces the side street, its recesses point inward", () => {
-  const A = assemble(corner("cr"));
-  const xm = bounds(corner("cr")).xMax;
+  const A = assemble(corner("c"));
+  const xm = bounds(corner("c")).xMax;
   // Base cornice: stairs one block out from the side wall, facing back toward it (west)
   const st = at(A, xm + 1, 4, -3);
   assert.equal(props(st).facing, "west");
@@ -85,7 +98,7 @@ test("the side facade's ornament faces the side street, its recesses point inwar
 });
 
 test("ornament on both corner columns continues round the corner", () => {
-  const A = assemble(corner("cr"));
+  const A = assemble(corner("c"));
   const xm = 3;
   assert.match(props(at(A, xm + 1, 4, 1)).shape, /^outer/, "base cornice meets in an outer corner stair");
   assert.match(at(A, xm + 1, 0, 1), /slab/, "plinth turns the corner");
@@ -93,26 +106,25 @@ test("ornament on both corner columns continues round the corner", () => {
 });
 
 test("no party wall on the corner side; the other side and back keep theirs", () => {
-  const p = corner("cr");
+  const p = corner("c");
   const A = assemble(p);
   const party = [...A.cells].filter(([, c]) => c.kind === "party").map(([k]) => k.split(",").map(Number));
-  const b = bounds(p);
-  assert.ok(party.some(([x]) => x === b.xMin), "inner side wall");
-  assert.ok(!party.some(([x, , z]) => x === b.xMax && z > -(p.width - 1)), "no wall on the side street");
-  assert.ok(party.some(([, , z]) => z === -(p.width - 1)), "back wall");
+  const lot = plot(p);
+  assert.ok(party.some(([x]) => x === lot.xMin), "inner side wall at the plot edge");
+  assert.ok(!party.some(([x]) => x === lot.xMax), "no wall on the side street");
+  assert.ok(party.some(([, , z]) => z === lot.zMin), "back wall at the plot edge");
 });
 
-test("a left corner is the mirror image of a right corner built from the mirrored facade", () => {
-  const A = assemble(corner("cl"));
-  const xm = bounds(corner("cl")).xMin;
-  assert.equal(props(at(A, xm - 1, 4, -3)).facing, "east");
-  assert.match(props(at(A, xm - 1, 4, 1)).shape, /^outer/);
-  assert.match(at(A, xm + 1, 2, -2), /glass_pane/);
+test("corners saved as left or right load as the one corner type", () => {
+  for (const [old, chamfer] of [["cl", 0], ["cr", 0], ["cl-ch", 2], ["cr-ch", 2]]) {
+    const p = corner(old);
+    assert.deepEqual(cornerOf(p), { chamfer }, old);
+  }
 });
 
 test("a chamfer cuts the corner and closes it with a stepped diagonal wall", () => {
   for (const c of [1, 2, 3]) {
-    const p = corner("cr-ch", c);
+    const p = corner("c-ch", c);
     assert.equal(cornerOf(p).chamfer, c);
     const A = assemble(p);
     const xm = 3;
@@ -131,7 +143,7 @@ test("a chamfer cuts the corner and closes it with a stepped diagonal wall", () 
 });
 
 test("the base cornice follows the chamfer as inner corner stairs", () => {
-  const A = assemble(corner("cr-ch", 2));
+  const A = assemble(corner("c-ch", 2));
   assert.match(props(at(A, 2, 4, 0)).shape, /^inner/);
   assert.match(props(at(A, 3, 4, -1)).shape, /^inner/);
 });

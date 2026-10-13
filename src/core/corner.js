@@ -1,13 +1,17 @@
 // Corner buildings: the front facade plus the same facade turned 90° to face
 // the side street. Pure functions, no DOM, no three.js.
 //
-// Everything is worked out for a RIGHT corner (side street to the east, +x).
-// A left corner mirrors the front, builds a right corner, and mirrors back,
-// which gives exactly the same result as turning the other way.
+// Corners are built one way only: the side street is on the right (east, +x)
+// when you face the front. Mirror one in WorldEdit or Axiom for the other hand.
 //
-// Right corner, in world coordinates:
+// The corner plot is as deep as the mid-row buildings on both streets (never
+// less than the facade width), so roofs line up with the neighbours. The
+// facade sits at the corner on each street; any extra length beside it
+// repeats the facade's end column, continuing the wall and its cornices.
+//
+// In world coordinates:
 //   the side facade's Core Wall is the plane x = xMax, running from z = 0
-//   (the shared corner column) back to z = −(width − 1). Its ornament points
+//   (the shared corner column) back to z = −(plot − 1). Its ornament points
 //   east (+x), its recesses west, into the building.
 //   A facade cell (x', y, z') of the side lands at (xMax + z', y, −(x' − xMin)).
 //
@@ -17,42 +21,41 @@
 // Outside the corner, matching ornament on both corner columns is continued
 // round the corner, mitred like a picture frame.
 
-import { BMAP, parseState, makeState, mirrorState, rotateState } from "./blocks.js";
+import { BMAP, parseState, makeState, rotateState } from "./blocks.js";
 import { K, unK, bounds, clamp } from "./facade.js";
 
-/** Building types: mid-row, and corners left/right, sharp or chamfered ("-ch"). */
-export const TYPES = /** @type {const} */ (["mid", "cl", "cr", "cl-ch", "cr-ch"]);
-export const TYPE_NAMES = {
-  mid: "Mid-row", cl: "Left corner", cr: "Right corner", "cl-ch": "Left corner, chamfered", "cr-ch": "Right corner, chamfered",
-};
+/** Building types: mid-row, and corners sharp ("c") or chamfered ("c-ch"). */
+export const TYPES = /** @type {const} */ (["mid", "c", "c-ch"]);
+export const TYPE_NAMES = { mid: "Mid-row", c: "Corner", "c-ch": "Corner, chamfered" };
+/** Left/right corner types saved before corners had one hand. */
+export const OLD_TYPES = { cl: "c", cr: "c", "cl-ch": "c-ch", "cr-ch": "c-ch" };
 export const CHAMFER_MIN = 1, CHAMFER_MAX = 3;
 
 /** Which building types a project generates (saved with the project). */
-export const typesDefaults = () => ({ mid: true, left: false, right: false, sharp: true, chamfered: false, chamfer: 2 });
+export const typesDefaults = () => ({ mid: true, corner: false, sharp: true, chamfered: false, chamfer: 2 });
 
 /**
- * The building types ticked in p.types, in order: mid-row, then left and right corners,
- * sharp before chamfered. A corner with neither style ticked counts as sharp;
- * with nothing ticked at all, mid-row.
+ * The building types ticked in p.types, in order: mid-row, then corners, sharp
+ * before chamfered. Corners with neither style ticked count as sharp; with
+ * nothing ticked at all, mid-row.
  * @returns {string[]}
  */
 export function typeList(p) {
   const t = { ...typesDefaults(), ...p.types };
   const out = t.mid ? ["mid"] : [];
   const styles = [t.sharp || !t.chamfered ? "" : null, t.chamfered ? "-ch" : null].filter((s) => s !== null);
-  for (const [on, code] of [[t.left, "cl"], [t.right, "cr"]]) if (on) for (const s of styles) out.push(code + s);
+  if (t.corner) for (const s of styles) out.push("c" + s);
   return out.length ? out : ["mid"];
 }
 
 /**
  * The corner of the building in p.assembly, or null for a mid-row building.
- * @returns {{side:"left"|"right", chamfer:number} | null}
+ * @returns {{chamfer:number} | null}
  */
 export function cornerOf(p) {
-  const t = p.assembly?.type || "mid";
+  const t = OLD_TYPES[p.assembly?.type] || p.assembly?.type || "mid";
   if (t === "mid" || !TYPES.includes(t)) return null;
   return {
-    side: t.startsWith("cl") ? "left" : "right",
     chamfer: t.endsWith("-ch") ? clamp(Math.round(p.types?.chamfer ?? 2), CHAMFER_MIN, CHAMFER_MAX) : 0,
   };
 }
@@ -122,41 +125,40 @@ export function mergeStairs(a, b, how) {
 
 /** @typedef {{s:string, kind:string, copy?:number}} Cell */
 
-/** Mirrors cells across the facade's middle (x -> xMin + xMax − x), blocks included. */
-export function mirrorCells(cells, p) {
-  const b = bounds(p), m = b.xMin + b.xMax;
-  const out = new Map();
-  for (const [k, c] of cells) {
-    const [x, y, z] = unK(k);
-    out.set(K(m - x, y, z), { ...c, s: mirrorState(c.s) });
-  }
-  return out;
-}
-
 /**
  * Turns a stack of front-facade cells into a corner building's facades.
  * @param {Map<string, Cell>} front the stacked front facade (base, bodies, capital)
- * @param {{side:"left"|"right", chamfer:number}} corner
+ * @param {{chamfer:number}} corner
+ * @param {number} plot the plot's size: as deep as the mid-row buildings, at least the facade width
  * @returns {Map<string, Cell>}
  */
-export function buildCorner(front, p, corner) {
-  if (corner.side === "left") return mirrorCells(rightCorner(mirrorCells(front, p), p, corner.chamfer), p);
-  return rightCorner(front, p, corner.chamfer);
-}
-
-function rightCorner(front, p, chamfer) {
+export function buildCorner(front, p, corner, plot = p.width) {
   const b = bounds(p), xm = b.xMax;
+  const extra = Math.max(0, plot - p.width);
+
+  // A plot longer than the facade: the front carries on inward by repeating its
+  // inner end column; the side carries on back by repeating the corner column
+  // (which becomes the side facade's far end once turned).
+  const frontLong = new Map(front);
+  const sideSource = new Map(front);
+  if (extra)
+    for (const [k, c] of front) {
+      const [x, y, z] = unK(k);
+      if (x === b.xMin) for (let i = 1; i <= extra; i++) frontLong.set(K(x - i, y, z), c);
+      if (x === b.xMax) for (let i = 1; i <= extra; i++) sideSource.set(K(x + i, y, z), c);
+    }
 
   // The side facade: the front turned a quarter turn anticlockwise.
   /** @type {Map<string, Cell>} */
   const side = new Map();
-  for (const [k, c] of front) {
+  for (const [k, c] of sideSource) {
     const [x, y, z] = unK(k);
     side.set(K(xm + z, y, -(x - b.xMin)), { ...c, s: rotateState(c.s, 1) });
   }
 
+  const out = new Map(frontLong);
+
   // Put them together: merge where they meet, otherwise trim.
-  const out = new Map(front);
   for (const [k, sc] of side) {
     const f = out.get(k);
     if (!f) { out.set(k, sc); continue; }
@@ -185,7 +187,7 @@ function rightCorner(front, p, chamfer) {
         }
     }
 
-  if (chamfer > 0) cutChamfer(out, front, p, chamfer);
+  if (corner.chamfer > 0) cutChamfer(out, front, p, corner.chamfer);
   return out;
 }
 
@@ -249,7 +251,7 @@ function cutChamfer(out, front, p, c) {
 }
 
 /**
- * Is (x, z) cut away by the chamfer of a right corner? Used to clip roofs.
+ * Is (x, z) cut away by a chamfer of size c? Used to clip roofs.
  */
 export function outsideChamfer(p, c, x, z) {
   const xm = bounds(p).xMax;

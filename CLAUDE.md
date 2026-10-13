@@ -93,9 +93,8 @@ two is open. "Fade repeated body floors" starts off.
 - **Floors**: minimum 3 (one base, one body, one capital). Extra floors repeat
   the body. Within one building, every body floor is the **same variant**;
   variety comes between buildings, not between floors.
-- **Combinations** = bases × bodies × capitals × roofs × floor counts ×
-  (mid-row depths + corner types). Floor and depth ranges are inclusive; corner
-  buildings have one depth (they are square).
+- **Combinations** = bases × bodies × capitals × roofs × floor counts × depths ×
+  building types (mid-row, corner, chamfered corner). Ranges are inclusive.
 - **Depth range**: how far back the building goes, Core Wall to back wall. Never
   less than the facade's back depth + 2. The `_Nd` file-name part and ", N deep"
   in titles appear only when the range has more than one value.
@@ -106,12 +105,20 @@ two is open. "Fade repeated body floors" starts off.
   weights. They only fill cells the facade leaves empty. A seed makes the result
   repeatable.
 - **Corners**:
-  - Building types are ticked in Final Assembly: mid-row, left corner, right
-    corner; corners sharp and/or chamfered (chamfer 1–3). `assembly.type` is
-    `mid`, `cl`, `cr`, `cl-ch` or `cr-ch`; file names end `_cl`, `_cr-ch`, etc.
-  - A corner building is square (depth = facade width). The side facade is the
-    same facade turned a quarter turn; the Core Walls share exactly one column.
-    Recesses point inward, ornament outward. No party wall on the corner side.
+  - Building types are ticked in Final Assembly: mid-row and corner; corners
+    sharp and/or chamfered (chamfer 1–3). `assembly.type` is `mid`, `c` or
+    `c-ch`; file names end `_c` or `_c-ch`. Older `cl`/`cr` types and
+    left/right ticks load as one corner type.
+  - One hand only: the side street is on the right (+x). Users mirror a corner
+    in WorldEdit or Axiom for the other hand.
+  - The corner plot is as deep as the mid-row buildings (the chosen depth), and
+    never narrower than the facade: plot = max(depth, width), square, reaching
+    inward (−x) and back (−z) from the corner column. The facade sits at the
+    corner on each street; extra length repeats the facade's end column (the
+    front repeats its inner column, the side its corner column, turned).
+  - The side facade is the front turned a quarter turn; the Core Walls share
+    exactly one column. Recesses point inward, ornament outward. No party wall
+    on the side street; party walls at the plot's inner side and back.
   - Collisions: **merge** (same block stays; two stairs combine into a corner
     stair), otherwise **trim** (Core Wall block on a Core Wall plane, air
     elsewhere). Ornament on both corner columns continues round the corner,
@@ -119,10 +126,10 @@ two is open. "Fade repeated body floors" starts off.
   - Chamfer: cuts c blocks off the corner and closes it with a stepped diagonal
     wall in the corner column's blocks. A band 1 block out follows the steps;
     deeper ornament is trimmed.
-  - Roofs on corners: gable/mansard/convex become hipped; sloped falls toward
-    both streets; edge applies on the street sides only; chamfers clip roofs.
-  - Everything is computed for a right corner; a left corner is built by
-    mirroring the front, building a right corner, and mirroring back.
+  - Roofs on corners are L-shaped and join the mid-row roofs seamlessly: each
+    wing uses the mid-row outline for the same depth, height and edge; hip at
+    the outer corner, valley inside. A plot wider than the depth gets a flat
+    patch in its inner back corner. Chamfers clip roofs.
 - **Minecraft version** is chosen first; only Java 1.21.11 for now. Block names
   and states must come from the chosen version.
 - **Block states** are stored as strings like
@@ -201,8 +208,9 @@ need a bump.
 5. 🔶 Export: WorldEdit `.schem` ✅ (checked in game on 1.21.11). Axiom `.bp` ✅
    (checked in game on 1.21.11). Next: Litematica `.litematic`.
 6. ✅ Combination generator with bulk export (checked in game with Axiom)
-7. 🔶 Corners: sharp and chamfered, left and right, merge/trim, hipped roofs:
-   built (awaiting in-game check). Later: longer side facades (repeating bays).
+7. 🔶 Corners: sharp and chamfered, merge/trim, plot as deep as the mid-row
+   buildings, L-shaped roofs that join the mid-row roofs: built (awaiting
+   in-game check). Later: repeating facade bays instead of a continued wall.
 8. 🔶 Roofs: gable, sloped, mansard, convex mansard, flat, garden; materials and
    gradient bands: built (awaiting in-game check). Later: dormers, hipped roofs.
 9. ⬜ Schematic import (user defines the Core Wall; validate and recentre x = 0)

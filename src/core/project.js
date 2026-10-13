@@ -7,7 +7,7 @@
 
 import { bulkDefaults } from "./bulk.js";
 import { roofDefaults } from "./roof.js";
-import { typesDefaults } from "./corner.js";
+import { typesDefaults, OLD_TYPES } from "./corner.js";
 
 export const FORMAT = "instrumentum-urbis/facade";
 export const FORMAT_VERSION = 2;
@@ -31,8 +31,13 @@ export function upgradeProject(p) {
   p.assembly ??= { base: 0, body: 0, capital: 0, floors: p.floorMin || 3, seed: 1 };
   p.assembly.roof ??= 0;
   p.assembly.depth ??= p.depthMin;
-  p.assembly.type ??= "mid";
-  p.types = { ...typesDefaults(), ...p.types };
+  p.assembly.type = OLD_TYPES[p.assembly.type] || p.assembly.type || "mid";
+  // Corners used to come left and right; now there is one corner (mirror it in-game).
+  const t = p.types || {};
+  if (("left" in t || "right" in t) && !("corner" in t)) t.corner = !!(t.left || t.right);
+  delete t.left;
+  delete t.right;
+  p.types = { ...typesDefaults(), ...t };
   p.partyWall ??= [];
   p.roofs = (p.roofs || []).map((r) => roofDefaults(r));
   p.bulk = { ...bulkDefaults(), ...p.bulk };

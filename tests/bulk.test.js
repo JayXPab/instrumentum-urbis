@@ -126,33 +126,34 @@ test("a version 1 project loads with its depth as a range of one", () => {
   assert.deepEqual(upgradeProject(structuredClone(p)), p, "upgrading again changes nothing");
 });
 
-test("ticked corner types add to the combinations, with one depth each", () => {
+test("ticked corner types add to the combinations, each in every depth", () => {
   const p = sampleProject(); // 144 mid-row buildings at depth 9
-  p.depthMax = 10; // mid-row now has 2 depths
-  p.types = { mid: true, left: true, right: true, sharp: true, chamfered: true, chamfer: 2 };
-  // per variant set: 2 mid-row depths + 4 corner types = 6 slots; × 2·2·2 variants × 3 roofs × 6 floor counts
-  assert.equal(comboCount(p).n, 6 * 8 * 3 * 6);
+  p.depthMax = 10; // 2 depths
+  p.types = { mid: true, corner: true, sharp: true, chamfered: true, chamfer: 2 };
+  // 3 types (mid-row, corner, chamfered corner) × 2 depths × 2·2·2 variants × 3 roofs × 6 floor counts
+  assert.equal(comboCount(p).n, 3 * 2 * 8 * 3 * 6);
   const all = chooseCombos(p);
   assert.equal(new Set(all.map((c) => key(c) + c.type + c.depth)).size, all.length);
-  assert.deepEqual([...new Set(all.map((c) => c.type))].sort(), ["cl", "cl-ch", "cr", "cr-ch", "mid"]);
-  assert.ok(all.filter((c) => c.type !== "mid").every((c) => c.depth === p.depthMin), "corners have one depth");
+  assert.deepEqual([...new Set(all.map((c) => c.type))].sort(), ["c", "c-ch", "mid"]);
+  assert.deepEqual([...new Set(all.filter((c) => c.type === "c").map((c) => c.depth))].sort((a, b) => a - b), [9, 10]);
 });
 
 test("corners only: no mid-row buildings; a corner with no style ticked is sharp", () => {
   const p = sampleProject();
-  p.types = { mid: false, left: false, right: true, sharp: false, chamfered: false, chamfer: 2 };
+  p.types = { mid: false, corner: true, sharp: false, chamfered: false, chamfer: 2 };
   assert.equal(comboCount(p).n, 144);
-  assert.ok(chooseCombos(p).every((c) => c.type === "cr"));
-  p.types = { mid: false, left: false, right: false };
+  assert.ok(chooseCombos(p).every((c) => c.type === "c"));
+  p.types = { mid: false, corner: false };
   assert.ok(chooseCombos(p).every((c) => c.type === "mid"), "nothing ticked falls back to mid-row");
 });
 
-test("corner buildings are named and titled by type", () => {
-  const p = forCombo(sampleProject(), { base: 0, body: 0, capital: 0, roof: 0, floors: 4, depth: 9, type: "cl-ch" });
-  p.depthMax = 12; // even with a depth range, corners carry no depth
-  assert.equal(schemName(p), "facade_b1-b1-c1-r1_4fl_cl-ch");
-  assert.match(buildingTitle(p), /, 4 floors, left corner, chamfered$/);
-  assert.match(indexCsv([{ file: "x.bp", p, blocks: 1 }]).split("\r\n")[1], /^x\.bp,"Left corner, chamfered",/);
+test("corner buildings are named and titled by type, with depth when there is a range", () => {
+  const p = forCombo(sampleProject(), { base: 0, body: 0, capital: 0, roof: 0, floors: 4, depth: 9, type: "c-ch" });
+  assert.equal(schemName(p), "facade_b1-b1-c1-r1_4fl_c-ch");
+  p.depthMax = 12;
+  assert.equal(schemName(p), "facade_b1-b1-c1-r1_4fl_9d_c-ch");
+  assert.match(buildingTitle(p), /, 4 floors, 9 deep, corner, chamfered$/);
+  assert.match(indexCsv([{ file: "x.bp", p, blocks: 1 }]).split("\r\n")[1], /^x\.bp,"Corner, chamfered",/);
 });
 
 test("an older project loads as mid-row only", () => {
@@ -162,5 +163,13 @@ test("an older project loads as mid-row only", () => {
   upgradeProject(p);
   assert.equal(p.assembly.type, "mid");
   assert.equal(p.types.mid, true);
-  assert.equal(p.types.right, false);
+  assert.equal(p.types.corner, false);
+  // Left/right ticks from before corners had one hand become "corner"
+  const q = sampleProject();
+  q.types = { mid: true, left: false, right: true, sharp: true, chamfered: false, chamfer: 2 };
+  q.assembly.type = "cr-ch";
+  upgradeProject(q);
+  assert.equal(q.types.corner, true);
+  assert.equal("right" in q.types, false);
+  assert.equal(q.assembly.type, "c-ch");
 });

@@ -9,7 +9,7 @@
 
 import { BMAP, parseState, makeState } from "./blocks.js";
 import { K, unK } from "./facade.js";
-import { assemble, buildingDepth } from "./assemble.js";
+import { assemble, chosenDepth } from "./assemble.js";
 import { cornerOf } from "./corner.js";
 import { nbt, TAG, writeNbt, varints } from "./nbt.js";
 
@@ -102,15 +102,15 @@ export function toSchem(p) {
 
 /**
  * File name (without extension) for the building in p.assembly, e.g. "facade_b1-b2-c1-r2_5fl_12d".
- * The -rN part appears only with roof styles, the _Nd part only for mid-row buildings when the
- * depth range has more than one value. Corner buildings end in _cl, _cr, _cl-ch or _cr-ch.
+ * The -rN part appears only with roof styles, the _Nd part only when the depth range has more
+ * than one value. Corner buildings end in _c or _c-ch.
  */
 export function schemName(p) {
   const a = p.assembly;
   const floors = Math.max(p.floorMin, Math.min(p.floorMax, a.floors));
   const roof = p.roofs?.length ? `-r${Math.min(a.roof ?? 0, p.roofs.length - 1) + 1}` : "";
   const corner = cornerOf(p);
-  const deep = !corner && p.depthMax > p.depthMin ? `_${buildingDepth(p)}d` : "";
-  const type = corner ? "_" + a.type : "";
+  const deep = p.depthMax > p.depthMin ? `_${chosenDepth(p)}d` : "";
+  const type = corner ? (corner.chamfer ? "_c-ch" : "_c") : "";
   return `facade_b${a.base + 1}-b${a.body + 1}-c${a.capital + 1}${roof}_${floors}fl${deep}${type}`;
 }
