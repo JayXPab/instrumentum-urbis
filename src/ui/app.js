@@ -12,6 +12,8 @@ import { assemble, comboCount, buildingDepth } from "../core/assemble.js";
 import { sampleProject } from "../core/sample.js";
 import { toSchem, schemName } from "../core/schem.js";
 import { blueprintParts, packBlueprint } from "../core/blueprint.js";
+import { bulkDefaults, bulkCount, chooseCombos, forCombo, indexCsv } from "../core/bulk.js";
+import { ZipWriter } from "../core/zip.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
 
 /* ============================================================
@@ -37,6 +39,7 @@ function save() {
 /** The project: everything that gets saved. */
 let P = loadStored();
 if (!validProject(P)) P = sampleProject();
+P.bulk = { ...bulkDefaults(), ...P.bulk };
 
 /** Editor-only state: never saved. */
 const ui = {
@@ -255,13 +258,13 @@ new ResizeObserver(() => { resize(); renderGrid(); }).observe(canvas.parentEleme
 })();
 
 /**
- * Pictures the assembled building alone (no guides, no fading) from the
+ * Pictures an assembled building alone (no guides, no fading) from the
  * front-right, as a square PNG with a transparent background.
  * @returns {Promise<Uint8Array>}
  */
-async function thumbnailPng(size = 256) {
+async function thumbnailPng(p = P, size = 256) {
   const g = new THREE.Group();
-  for (const [k, c] of assemble(P).cells) { const [x, y, z] = unK(k); g.add(blockObject(c.s, x, y, z)); }
+  for (const [k, c] of assemble(p).cells) { const [x, y, z] = unK(k); g.add(blockObject(c.s, x, y, z)); }
   const shown = [world.visible, helpers.visible, hover.visible], bg = scene.background, alpha = renderer.getClearAlpha();
   world.visible = helpers.visible = hover.visible = false;
   scene.background = null;
@@ -597,6 +600,7 @@ function renderBuildPanel() {
     $("schemInfo").textContent = e.message;
     $("dlSchem").disabled = $("dlBp").disabled = true;
   }
+  renderBulk();
   const rows = $("pwRows");
   rows.innerHTML = "";
   P.partyWall.forEach((e, i) => {
@@ -783,17 +787,114 @@ $("dlSchem").onclick = async () => {
   download(schemName(P) + ".schem", new Blob([await gzip(r.bytes)]));
   toast("Downloaded " + schemName(P) + ".schem");
 };
-/** Builds the Axiom blueprint file, thumbnail included. */
-async function blueprintFile() {
-  const parts = blueprintParts(P);
-  return packBlueprint(parts.header, await thumbnailPng(), await gzip(parts.blocks));
+/** Builds an Axiom blueprint file, thumbnail included. */
+async function blueprintFile(p = P) {
+  const parts = blueprintParts(p);
+  return { bytes: packBlueprint(parts.header, await thumbnailPng(p), await gzip(parts.blocks)), blocks: parts.count };
 }
 $("dlBp").onclick = async () => {
   let bytes;
-  try { bytes = await blueprintFile(); } catch (e) { return toast(e.message); }
+  try { ({ bytes } = await blueprintFile()); } catch (e) { return toast(e.message); }
   download(schemName(P) + ".bp", new Blob([bytes]));
   toast("Downloaded " + schemName(P) + ".bp");
 };
+/* ---------- bulk export ---------- */
+const FORMAT_NAMES = { bp: ".bp", schem: ".schem", both: ".bp + .schem" };
+let bulkRun = null; // { cancelled } while a bulk export is running
+
+/** Lets the page repaint and handle clicks. (setTimeout would be slowed to 1 s in a background tab.) */
+const yieldToPage = () => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
+
+function renderBulk() {
+  const B = P.bulk;
+  const { n, total } = bulkCount(P);
+  $("bulkFmt").value = B.format;
+  $("bulkN").value = n;
+  $("bulkN").max = total;
+  $("bulkOf").textContent = n === total ? `(all ${total.toLocaleString()})` : `of ${total.toLocaleString()}`;
+  $("bulkSeed").value = B.seed;
+  $("bulkLimit").value = B.limit;
+  // Random sample only means something when taking fewer than all.
+  const some = n < total;
+  $("bulkRand").checked = some && B.random;
+  $("bulkRand").disabled = !some;
+  $("bulkRandLbl").style.opacity = some ? "" : "0.5";
+  if (!bulkRun) {
+    const files = n * (B.format === "both" ? 2 : 1);
+    $("bulkInfo").textContent = !n
+      ? "Nothing to export: add a variant to every stage."
+      : `${n.toLocaleString()} building${n === 1 ? "" : "s"}, ${files.toLocaleString()} ${FORMAT_NAMES[B.format]} file${files === 1 ? "" : "s"}` +
+        (n === total ? "" : B.random ? ", picked at random" : ", the first in order") +
+        (n > B.limit ? `. That’s more than ${B.limit.toLocaleString()}, so you’ll be asked first.` : ".");
+    $("bulkGo").disabled = !n || checks(P).some((c) => c[0] === "err");
+  }
+}
+const bulkSet = (fn) => (e) => { fn(e.target); save(); renderBulk(); };
+$("bulkFmt").onchange = bulkSet((t) => { P.bulk.format = t.value; });
+$("bulkN").onchange = bulkSet((t) => {
+  const v = parseInt(t.value, 10);
+  // Empty, or at least the total, means all combinations.
+  P.bulk.amount = !(v > 0) || v >= comboCount(P).n ? null : v;
+});
+$("bulkRand").onchange = bulkSet((t) => { P.bulk.random = t.checked; });
+$("bulkSeed").onchange = bulkSet((t) => { P.bulk.seed = Math.max(0, parseInt(t.value, 10) || 0); });
+$("bulkLimit").onchange = bulkSet((t) => { P.bulk.limit = Math.max(1, parseInt(t.value, 10) || bulkDefaults().limit); });
+
+$("bulkGo").onclick = async () => {
+  const B = P.bulk;
+  const combos = chooseCombos(P);
+  if (!combos.length) return;
+  if (combos.length > B.limit &&
+      !confirm(`This will generate ${combos.length.toLocaleString()} buildings, more than your limit of ${B.limit.toLocaleString()}. It may take a while. Continue?`)) return;
+
+  const run = (bulkRun = { cancelled: false });
+  const P0 = JSON.parse(JSON.stringify(P)); // edits made while it runs don't mix into this export
+  const fmts = B.format === "both" ? ["bp", "schem"] : [B.format];
+  const zip = new ZipWriter();
+  const rows = [];
+  $("bulkGo").disabled = true;
+  $("bulkStop").hidden = false;
+  $("bulkProg").hidden = false;
+  $("bulkProg").max = combos.length;
+  try {
+    for (let i = 0; i < combos.length; i++) {
+      if (run.cancelled) { toast("Bulk export cancelled"); return; }
+      $("bulkProg").value = i;
+      $("bulkInfo").textContent = `Building ${i + 1} of ${combos.length.toLocaleString()}…`;
+      const q = forCombo(P0, combos[i]);
+      const name = schemName(q);
+      for (const f of fmts) {
+        // With both formats, each gets its own folder; otherwise the files sit at the top.
+        const path = (fmts.length > 1 ? f + "/" : "") + name + "." + f;
+        let blocks;
+        if (f === "bp") {
+          const r = await blueprintFile(q);
+          zip.add(path, r.bytes);
+          blocks = r.blocks;
+        } else {
+          const r = toSchem(q);
+          zip.add(path, await gzip(r.bytes));
+          blocks = r.blocks;
+        }
+        rows.push({ file: path, p: q, blocks });
+      }
+      await yieldToPage();
+    }
+    zip.add("index.csv", indexCsv(rows));
+    const file = `instrumentum-urbis_${combos.length}-buildings.zip`;
+    download(file, new Blob(zip.finish(), { type: "application/zip" }));
+    toast(`Downloaded ${file} (${(zip.size / 1048576).toFixed(1)} MB)`);
+  } catch (e) {
+    toast("Bulk export stopped: " + e.message);
+  } finally {
+    bulkRun = null;
+    $("bulkStop").hidden = true;
+    $("bulkProg").hidden = true;
+    renderBulk();
+  }
+};
+$("bulkStop").onclick = () => { if (bulkRun) bulkRun.cancelled = true; };
+
 function loadText(t) {
   let p;
   try { p = JSON.parse(t); } catch (e) { return toast("That isn’t valid JSON. Check that the whole text was pasted."); }
@@ -802,6 +903,7 @@ function loadText(t) {
   P = p;
   P.assembly ??= { base: 0, body: 0, capital: 0, floors: P.floorMin || 3, seed: 1 };
   P.partyWall ??= [];
+  P.bulk = { ...bulkDefaults(), ...P.bulk };
   afterStructural();
   fitView();
   toast("Project loaded");

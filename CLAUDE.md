@@ -46,6 +46,8 @@ src/core/             the facade rules: NO DOM, NO three.js
   nbt.js              NBT (Minecraft binary format) writer/reader, varints
   schem.js            assembled building -> Sponge v3 .schem; pane connections
   blueprint.js        assembled building -> Axiom .bp (16³ sections, file layout)
+  bulk.js             combination generator: all / first N / random sample, seeds
+  zip.js              minimal stored (uncompressed) zip writer
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
@@ -113,12 +115,27 @@ ported to Java for the mod, and the part the tests cover.
 - The editor stores bare glass panes; the exporter adds their north/south/east/west
   connections. Other blocks are exported exactly as stored.
 
+## Bulk export
+
+- Combinations are numbered with floors counting fastest, then capital, body,
+  base (`comboAt`). "How many" below the total takes the first N in that order,
+  or, with **Random sample** ticked, N different ones picked with the bulk seed.
+  Random sample is only available when taking fewer than all.
+- Each building's party-wall seed is a hash of the bulk seed and its combination,
+  so the same settings always give the same buildings.
+- One `.zip` per run. One format: files at the top level. Both: `bp/` and
+  `schem/` folders. `index.csv` lists file, variant names, floors, seed, blocks.
+- Above the "ask before" limit (default 200) the editor asks first.
+- `.bp` headers carry a readable title ("Shopfront / Three windows / Cornice,
+  5 floors"); file names stay short (`facade_b1-b2-c1_5fl`).
+
 ## Project file
 
 The editor saves the project in the browser (localStorage key
 `instrumentum-urbis.project.v1`) and can copy or load it as JSON. The JSON has
 `format: "instrumentum-urbis/facade"` and `formatVersion: 1`. If the shape
-changes, bump `formatVersion` and keep loading older files.
+changes, bump `formatVersion` and keep loading older files. Optional additions
+that fill in defaults on load (like `bulk`, added after v1) don't need a bump.
 
 ## Roadmap
 
@@ -128,7 +145,7 @@ changes, bump `formatVersion` and keep loading older files.
 4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
 5. 🔶 Export: WorldEdit `.schem` ✅ (checked in game on 1.21.11). Axiom `.bp` ✅
    (checked in game on 1.21.11). Next: Litematica `.litematic`.
-6. ⬜ Combination generator with bulk export ("all combinations" warns above a limit)
+6. 🔶 Combination generator with bulk export: built (awaiting in-game check)
 7. ⬜ Corners: sharp, then chamfered, with the merge/trim rule
 8. ⬜ Roofs: gable, mansard, convex mansard, sloped; roof block and gradients
 9. ⬜ Schematic import (user defines the Core Wall; validate and recentre x = 0)
