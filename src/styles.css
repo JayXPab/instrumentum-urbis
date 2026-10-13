@@ -107,6 +107,8 @@ textarea{font-family:var(--f-mono);font-size:11.5px;resize:vertical}
 .combo{font-family:var(--f-display);font-size:34px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums}
 .formula{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
 .pw{display:grid;grid-template-columns:1fr 58px auto;gap:6px;align-items:center}
+.band{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--line);border-radius:4px}
+.bandhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .rangeval{font-family:var(--f-mono);font-size:12px}
 input[type=range]{width:100%;accent-color:var(--accent)}
 

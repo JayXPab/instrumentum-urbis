@@ -102,6 +102,69 @@
           <input type="range" id="floors" min="3" max="10" step="1">
         </div>
       </div>
+      <div class="sec" id="roofSec">
+        <h2>Roofs</h2>
+        <p class="lbl" style="margin:0">Roof styles are part of the combinations. You edit the one chosen under This building.</p>
+        <div class="acts">
+          <button class="btn small" id="roofNew">New roof</button>
+          <button class="btn small" id="roofDup">Duplicate</button>
+          <button class="btn small danger" id="roofDel">Delete</button>
+        </div>
+        <div id="roofEdit" style="display:flex;flex-direction:column;gap:10px">
+          <div class="fld"><label for="roofName">Name</label><input type="text" id="roofName" maxlength="40"></div>
+          <div class="row2">
+            <div class="fld">
+              <label for="roofType">Type</label>
+              <select id="roofType">
+                <option value="gable">Gable</option>
+                <option value="sloped">Sloped</option>
+                <option value="mansard">Mansard</option>
+                <option value="convex">Convex mansard</option>
+                <option value="flat">Flat</option>
+                <option value="garden">Garden</option>
+              </select>
+            </div>
+            <div class="fld" data-for="sloped">
+              <label for="roofRidge">Ridge</label>
+              <select id="roofRidge">
+                <option value="parallel">Along street</option>
+                <option value="street">Gable to street</option>
+              </select>
+            </div>
+          </div>
+          <div class="fld" data-for="sloped">
+            <label for="roofHeight">Height <span class="rangeval" id="roofHeightVal"></span></label>
+            <input type="range" id="roofHeight" min="1" max="24" step="1">
+          </div>
+          <div class="fld" data-for="sloped">
+            <label for="roofEdge">Edge <span class="rangeval" id="roofEdgeVal"></span></label>
+            <input type="range" id="roofEdge" min="-3" max="2" step="1">
+          </div>
+          <label class="chk" data-for="flip" title="A sloped roof is high at the back (or left) by default. Tick to make it high at the front (or right).">
+            <input type="checkbox" id="roofFlip"> High side at the front
+          </label>
+          <div class="fld" data-for="gableBlock">
+            <label for="roofGable">Gable end facing the street</label><select id="roofGable"></select>
+          </div>
+          <label class="chk" data-for="flat"><input type="checkbox" id="roofParapet"> Parapet round the edge</label>
+          <div class="fld" data-for="parapetBlock">
+            <label for="roofParapetBlock">Parapet wall</label><select id="roofParapetBlock"></select>
+          </div>
+          <div class="fld" data-for="garden">
+            <label for="roofDensity">Plants <span class="rangeval" id="roofDensityVal"></span></label>
+            <input type="range" id="roofDensity" min="0" max="100" step="5">
+          </div>
+          <div class="fld" data-for="bands">
+            <label>Material gradient <span class="lbl" id="roofBandsHint"></span></label>
+            <div id="roofBands" style="display:flex;flex-direction:column;gap:8px"></div>
+            <button class="btn small" id="roofBandAdd" style="align-self:flex-start">Add band</button>
+          </div>
+          <div class="fld" data-for="blend" title="How far neighbouring bands mix into each other: 0 is a sharp line.">
+            <label for="roofBlend">Band blend <span class="rangeval" id="roofBlendVal"></span></label>
+            <input type="range" id="roofBlend" min="0" max="100" step="5">
+          </div>
+        </div>
+      </div>
       <div class="sec">
         <h2>Export this building</h2>
         <div class="acts">

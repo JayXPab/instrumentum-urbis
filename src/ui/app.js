@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BLOCKS, BMAP, parseState, makeState, shortId, mirrorState } from "../core/blocks.js";
+import { BLOCKS, BMAP, MATERIALS, parseState, makeState, shortId, mirrorState } from "../core/blocks.js";
 import {
   STAGES, STAGE_NAMES, K, unK, uid, clamp, bounds, mirrorX, axisX,
   newVariant, pruneAll, checks, validProject,
@@ -14,6 +14,7 @@ import { toSchem, schemName } from "../core/schem.js";
 import { blueprintParts, packBlueprint } from "../core/blueprint.js";
 import { bulkDefaults, bulkCount, chooseCombos, forCombo, indexCsv } from "../core/bulk.js";
 import { ZipWriter } from "../core/zip.js";
+import { roofDefaults, SLOPED } from "../core/roof.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
 
 /* ============================================================
@@ -40,7 +41,7 @@ function save() {
 let P = loadStored();
 if (!validProject(P)) P = sampleProject();
 P.bulk = { ...bulkDefaults(), ...P.bulk };
-P.roofs ??= [];
+P.roofs = (P.roofs || []).map((r) => roofDefaults(r));
 P.assembly.roof ??= 0;
 
 /** Editor-only state: never saved. */
@@ -606,6 +607,7 @@ function renderBuildPanel() {
     $("schemInfo").textContent = e.message;
     $("dlSchem").disabled = $("dlBp").disabled = true;
   }
+  renderRoofs();
   renderBulk();
   const rows = $("pwRows");
   rows.innerHTML = "";
@@ -806,6 +808,146 @@ $("dlBp").onclick = async () => {
   download(schemName(P) + ".bp", new Blob([bytes]));
   toast("Downloaded " + schemName(P) + ".bp");
 };
+/* ---------- roofs ---------- */
+const curRoof = () => (P.roofs.length ? P.roofs[clamp(P.assembly.roof, 0, P.roofs.length - 1)] : null);
+const cubeOptions = (sel) =>
+  BLOCKS.filter((b) => b.shape === "cube").map((b) => `<option value="${b.id}"${b.id === sel ? " selected" : ""}>${escapeHtml(b.name)}</option>`).join("");
+const edgeText = (e) => (e < 0 ? `inset ${-e}` : e > 0 ? `overhang ${e}` : "flush with the walls");
+
+function renderRoofs() {
+  const r = curRoof();
+  $("roofEdit").hidden = !r;
+  $("roofDup").disabled = $("roofDel").disabled = !r;
+  if (!r) return;
+  const sloped = SLOPED.has(r.type);
+  $("roofName").value = r.name;
+  $("roofType").value = r.type;
+  $("roofRidge").value = r.ridge;
+  $("roofHeight").value = r.height;
+  $("roofHeightVal").textContent = `${r.height} block${r.height === 1 ? "" : "s"}`;
+  $("roofEdge").value = r.edge;
+  $("roofEdgeVal").textContent = edgeText(r.edge);
+  $("roofFlip").checked = r.flip;
+  $("roofGable").innerHTML = cubeOptions(r.gableBlock || P.coreBlock);
+  $("roofParapet").checked = r.parapet;
+  $("roofParapetBlock").innerHTML = cubeOptions(r.parapetBlock);
+  $("roofDensity").value = Math.round(r.density * 100);
+  $("roofDensityVal").textContent = Math.round(r.density * 100) + "%";
+  $("roofBlend").value = Math.round(r.blend * 100);
+  $("roofBlendVal").textContent = Math.round(r.blend * 100) + "%";
+  const show = {
+    sloped,
+    flip: r.type === "sloped",
+    gableBlock: sloped && r.ridge === "street",
+    flat: r.type === "flat",
+    parapetBlock: r.type === "garden" || (r.type === "flat" && r.parapet),
+    garden: r.type === "garden",
+    bands: r.type !== "garden",
+    blend: sloped && r.bands.length > 1,
+  };
+  document.querySelectorAll("#roofEdit [data-for]").forEach((el) => { el.hidden = !show[el.dataset.for]; });
+  $("roofBandsHint").textContent = sloped ? "(eaves at the top of the list, ridge at the bottom)" : "(a flat roof uses the first band)";
+  renderBands(r);
+}
+
+/** One box per band; each band lists its materials with weights. */
+function renderBands(r) {
+  const box = $("roofBands");
+  box.innerHTML = "";
+  r.bands.forEach((band, bi) => {
+    const d = document.createElement("div");
+    d.className = "band";
+    const label = r.bands.length === 1 ? "Whole roof" : bi === 0 ? "Band 1 · eaves" : bi === r.bands.length - 1 ? `Band ${bi + 1} · ridge` : `Band ${bi + 1}`;
+    d.innerHTML = `<div class="bandhead"><span class="lbl">${label}</span>${r.bands.length > 1 ? `<button class="btn small danger" aria-label="Remove band ${bi + 1}">Remove band</button>` : ""}</div>`;
+    if (r.bands.length > 1) d.querySelector(".bandhead button").onclick = () => { snapshot(); r.bands.splice(bi, 1); afterRoof(); };
+    band.mix.forEach((m, mi) => {
+      const row = document.createElement("div");
+      row.className = "pw";
+      const opts = MATERIALS.map((x) => `<option value="${x.id}"${x.id === m.material ? " selected" : ""}>${escapeHtml(x.name)}</option>`).join("");
+      row.innerHTML = `<select aria-label="Band ${bi + 1} material ${mi + 1}">${opts}</select><input type="number" min="0" max="99" value="${m.weight}" aria-label="Weight"><button class="btn small danger" aria-label="Remove material"${band.mix.length > 1 ? "" : " disabled"}>✕</button>`;
+      row.querySelector("select").onchange = (ev) => { snapshot(); m.material = ev.target.value; afterRoof(); };
+      row.querySelector("input").onchange = (ev) => { snapshot(); m.weight = clamp(+ev.target.value || 0, 0, 99); afterRoof(); };
+      row.querySelector("button").onclick = () => { snapshot(); band.mix.splice(mi, 1); afterRoof(); };
+      d.appendChild(row);
+    });
+    const add = document.createElement("button");
+    add.className = "btn small";
+    add.textContent = "Add material";
+    add.style.alignSelf = "flex-start";
+    add.onclick = () => { snapshot(); band.mix.push({ material: band.mix[band.mix.length - 1].material, weight: 1 }); afterRoof(); };
+    d.appendChild(add);
+    box.appendChild(d);
+  });
+}
+
+function afterRoof(refit = false) {
+  save(); renderBuildPanel(); render3D();
+  if (refit) fitView();
+}
+/** Select, tick box or text field: one undo step per change. */
+const roofSet = (id, fn, refit = false) => {
+  $(id).onchange = (e) => { const r = curRoof(); if (!r) return; snapshot(); fn(r, e.target); afterRoof(refit); };
+};
+roofSet("roofName", (r, t) => { r.name = t.value.trim() || "Roof"; });
+roofSet("roofType", (r, t) => { r.type = t.value; }, true);
+roofSet("roofRidge", (r, t) => { r.ridge = t.value; }, true);
+roofSet("roofFlip", (r, t) => { r.flip = t.checked; });
+roofSet("roofGable", (r, t) => { r.gableBlock = t.value; });
+roofSet("roofParapet", (r, t) => { r.parapet = t.checked; });
+roofSet("roofParapetBlock", (r, t) => { r.parapetBlock = t.value; });
+
+/** Sliders: the view follows while dragging; the whole drag is one undo step. */
+let roofDragging = false;
+const roofSlider = (id, fn, text, refit = false) => {
+  $(id).addEventListener("input", (e) => {
+    const r = curRoof();
+    if (!r) return;
+    if (!roofDragging) { snapshot(); roofDragging = true; }
+    fn(r, +e.target.value);
+    $(id + "Val").textContent = text(r);
+    save(); render3D();
+  });
+  $(id).addEventListener("change", () => { roofDragging = false; renderBuildPanel(); if (refit) fitView(); });
+};
+roofSlider("roofHeight", (r, v) => { r.height = v; }, (r) => `${r.height} block${r.height === 1 ? "" : "s"}`, true);
+roofSlider("roofEdge", (r, v) => { r.edge = v; }, (r) => edgeText(r.edge));
+roofSlider("roofDensity", (r, v) => { r.density = v / 100; }, (r) => Math.round(r.density * 100) + "%");
+roofSlider("roofBlend", (r, v) => { r.blend = v / 100; }, (r) => Math.round(r.blend * 100) + "%");
+
+$("roofBandAdd").onclick = () => {
+  const r = curRoof();
+  if (!r) return;
+  snapshot();
+  r.bands.push({ mix: [{ material: r.bands[r.bands.length - 1].mix[0].material, weight: 1 }] });
+  afterRoof();
+};
+$("roofNew").onclick = () => {
+  snapshot();
+  P.roofs.push(roofDefaults({ name: `Roof ${P.roofs.length + 1}` }));
+  P.assembly.roof = P.roofs.length - 1;
+  afterRoof(true);
+};
+$("roofDup").onclick = () => {
+  const r = curRoof();
+  if (!r) return;
+  snapshot();
+  const c = JSON.parse(JSON.stringify(r));
+  c.id = uid();
+  c.name = r.name + " copy";
+  P.roofs.splice(P.assembly.roof + 1, 0, c);
+  P.assembly.roof += 1;
+  afterRoof();
+};
+$("roofDel").onclick = () => {
+  const r = curRoof();
+  if (!r) return;
+  snapshot();
+  P.roofs.splice(P.assembly.roof, 1);
+  P.assembly.roof = clamp(P.assembly.roof, 0, Math.max(0, P.roofs.length - 1));
+  afterRoof(true);
+  toast(`Deleted “${r.name}”. Ctrl+Z brings it back.`);
+};
+
 /* ---------- bulk export ---------- */
 const FORMAT_NAMES = { bp: ".bp", schem: ".schem", both: ".bp + .schem" };
 let bulkRun = null; // { cancelled } while a bulk export is running
@@ -912,7 +1054,7 @@ function loadText(t) {
   P.assembly ??= { base: 0, body: 0, capital: 0, floors: P.floorMin || 3, seed: 1 };
   P.partyWall ??= [];
   P.bulk = { ...bulkDefaults(), ...P.bulk };
-  P.roofs ??= [];
+  P.roofs = (P.roofs || []).map((r) => roofDefaults(r));
   P.assembly.roof ??= 0;
   afterStructural();
   fitView();

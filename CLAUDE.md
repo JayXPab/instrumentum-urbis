@@ -130,6 +130,24 @@ ported to Java for the mod, and the part the tests cover.
 - `.bp` headers carry a readable title ("Shopfront / Three windows / Cornice,
   5 floors"); file names stay short (`facade_b1-b2-c1_5fl`).
 
+## Roofs
+
+- A roof style is settings, not drawn blocks: type (gable, sloped, mansard,
+  convex mansard, flat, garden), ridge (along the street, or gable to the street),
+  height (any number of blocks), edge (−3 inset … +2 overhang), bands.
+- Sloped types are an outline across the slope, rounded to half blocks: half step
+  = bottom slab, full step = stair (tall half uphill), peak/level = block, with
+  blocks underneath down to the lower neighbour. Gable ends are filled: party-wall
+  blocks on party walls, the gable block at a street-facing front.
+- Gradient: bands from eaves to ridge, each a weighted mix of materials (a full
+  block with matching stairs and slab, `MATERIALS`); `blend` softens band borders.
+  Flat roofs use the first band.
+- Garden: walled (parapet block, 2 high), grass blocks, plants by density.
+- Roof styles multiply the combinations. With none, buildings have flat tops and
+  file names have no `-rN`. The roof has its own random numbers and the party-wall
+  seed ignores the roof, so changing roofs never changes the walls.
+- Edge applies to the eave sides only; flat and garden roofs ignore it.
+
 ## Project file
 
 The editor saves the project in the browser (localStorage key
@@ -148,12 +166,15 @@ that fill in defaults on load (like `bulk`, added after v1) don't need a bump.
    (checked in game on 1.21.11). Next: Litematica `.litematic`.
 6. ✅ Combination generator with bulk export (checked in game with Axiom)
 7. ⬜ Corners: sharp, then chamfered, with the merge/trim rule
-8. ⬜ Roofs: gable, mansard, convex mansard, sloped; roof block and gradients
+8. 🔶 Roofs: gable, sloped, mansard, convex mansard, flat, garden; materials and
+   gradient bands: built (awaiting in-game check). Later: dormers, hipped roofs.
 9. ⬜ Schematic import (user defines the Core Wall; validate and recentre x = 0)
 10. ⬜ Desktop app (Tauri); later the in-game mod
 
 ## Known limits
 
-- Blocks are drawn as flat colours, not textures. Stair and pane shapes are simplified.
+- Blocks are drawn as flat colours, not textures. Stair, pane and plant shapes are simplified.
+- Testing: the `editor-scratch` launch config runs a second dev server on port 5174.
+  It has its own browser storage, so tests there never touch the owner's project.
 - Stair shapes (inner/outer corners) are not worked out on export; stairs export
   as straight unless the stored state says otherwise.
