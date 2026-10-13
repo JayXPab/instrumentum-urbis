@@ -53,6 +53,7 @@ src/core/             the facade rules: NO DOM, NO three.js
   roof.js             roof styles: shapes, materials/gradient, garden planting
   corner.js           corner buildings: turned side facade, merge/trim, chamfer
   colour.js           colour variants: white slot blocks, main and base colours
+  import.js           reading .schem/.litematic/.bp; turning blocks into variants
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
@@ -208,6 +209,26 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   seed ignores the roof, so changing roofs never changes the walls.
 - Edge applies to the eave sides only; flat and garden roofs ignore it.
 
+## Import
+
+- **Import schematic…** in the Stage editor's Stages section opens an import
+  view (mode `import`): left panel settings, 3D in the middle, "What will
+  happen" and Import/Cancel on the right.
+- Reads WorldEdit `.schem` (Sponge v2 and v3), Litematica `.litematic` (all
+  regions, negative sizes) and Axiom `.bp`. Air, void air and structure voids
+  are dropped; unknown blocks are kept as they are.
+- Settings (in the turned import's coordinates): turns (street side to +z),
+  Core Wall layer (slider, or click a block), left/right edges, bottom/top rows,
+  and either a whole facade (base rows from the bottom, body the floor above,
+  capital rows from the top) or one stage. First guesses: Core Wall = fullest z
+  layer, edges and rows = everything.
+- The marked middle becomes x = 0. Width: padded with the Core Wall block or
+  trimmed evenly. Depth: front/back grow to fit, up to the depth rule; deeper
+  blocks are cut. Height: an empty stage takes the import's height; otherwise
+  the user picks "keep stage height" (trim/pad the import) or "change stage
+  height" (trim/pad its other variants). Padding rows are Core Wall blocks.
+- Not supported: MCEdit `.schematic` (pre-1.13) and Structure Block `.nbt`.
+
 ## Project file
 
 The editor saves the project in the browser (localStorage key
@@ -234,7 +255,8 @@ need a bump.
    Later: repeating facade bays instead of a continued wall.
 8. ✅ Roofs: gable, sloped, mansard, convex mansard, flat, garden; materials and
    gradient bands (checked in game). Later: dormers, hipped mid-row roofs.
-9. ⬜ Schematic import (user defines the Core Wall; validate and recentre x = 0)
+9. 🔶 Schematic import: .schem/.litematic/.bp, Core Wall and edges, whole facade
+   or one stage, recentred to x = 0: built (awaiting in-game files check).
 10. ⬜ Desktop app (Tauri); later the in-game mod
 
 ## Known limits

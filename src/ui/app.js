@@ -15,6 +15,7 @@ import { sampleProject } from "../core/sample.js";
 import { toSchem, schemName } from "../core/schem.js";
 import { blueprintParts, packBlueprint } from "../core/blueprint.js";
 import { toLitematic } from "../core/litematic.js";
+import { readSchematicFile, guessSettings, planImport, applyImport, turnBlocks, extent, importRows } from "../core/import.js";
 import { bulkDefaults, bulkCount, chooseCombos, forCombo, indexCsv, FORMATS, FORMAT_NAMES, bulkFormats } from "../core/bulk.js";
 import { ZipWriter } from "../core/zip.js";
 import { roofDefaults, SLOPED } from "../core/roof.js";
@@ -183,7 +184,9 @@ function render3D() {
   const b = bounds(P), accent = css("--accent"), muted = css("--muted"), fg = css("--fg");
   scene.background = new THREE.Color(css("--viewport"));
 
-  if (ui.mode === "edit") {
+  if (ui.mode === "import") {
+    renderImport3D(accent, muted, fg);
+  } else if (ui.mode === "edit") {
     const v = curVariant(), h = P.heights[ui.stage];
     $("viewtag").innerHTML = v ? `${STAGE_NAMES[ui.stage]} <small>${escapeHtml(v.name)}</small>` : STAGE_NAMES[ui.stage];
     if (v) for (const [k, s] of Object.entries(v.blocks)) { const [x, y, z] = unK(k); world.add(blockObject(s, x, y, z)); }
@@ -272,7 +275,12 @@ function pasteMarker(color) {
 function fitView() {
   const b = bounds(P);
   let h, zMin = b.zMin, xMin = b.xMin, xMax = b.xMax, zMax = b.zMax;
-  if (ui.mode === "edit") h = P.heights[ui.stage];
+  if (ui.mode === "import") {
+    if (!imp.turned) return;
+    const e = extent(imp.turned);
+    ({ xMin, xMax, zMin, zMax } = e);
+    h = e.yMax + 1;
+  } else if (ui.mode === "edit") h = P.heights[ui.stage];
   else {
     // Frame everything that was built: corner buildings reach out to the side street.
     const A = assemble(P);
@@ -380,7 +388,9 @@ canvas.addEventListener("pointerup", (e) => {
   const d = Math.hypot(e.clientX - down.x, e.clientY - down.y), info = down;
   down = null;
   // A short press without dragging is a click; anything else was orbiting.
-  if (ui.mode !== "edit" || d > 5 || performance.now() - info.t > 600) return;
+  if (d > 5 || performance.now() - info.t > 600) return;
+  if (ui.mode === "import") return importClick(e);
+  if (ui.mode !== "edit") return;
   const h = hitAt(e);
   if (!h) return;
   const tool = info.b === 2 || info.shift ? "erase" : ui.tool;
@@ -569,7 +579,9 @@ function setTool(t) {
   updateHint();
 }
 function updateHint() {
-  $("hint").textContent = ui.mode === "edit"
+  $("hint").textContent = ui.mode === "import"
+    ? "Click a block: its layer becomes the Core Wall · Drag: orbit · Scroll: zoom"
+    : ui.mode === "edit"
     ? "Click: " + ui.tool + " · Right-click or Shift: erase · Drag: orbit · Ctrl+Z: undo"
     : "Drag: orbit · Right-drag: pan · Scroll: zoom";
 }
@@ -827,6 +839,9 @@ function setMode(m) {
   $("modeExport").setAttribute("aria-pressed", String(m === "export"));
   $("leftEdit").hidden = m !== "edit";
   $("rightEdit").hidden = m !== "edit";
+  $("leftImport").hidden = $("rightImport").hidden = m !== "import";
+  // While importing, the Stage editor tab stays lit: import is part of it.
+  if (m === "import") $("modeEdit").setAttribute("aria-pressed", "true");
   $("leftBuild").hidden = $("rightBuild").hidden = m !== "build";
   $("leftExport").hidden = $("rightExport").hidden = m !== "export";
   // Combinations and Random building show at the top of both Final Assembly and Export.
@@ -834,7 +849,7 @@ function setMode(m) {
   if ($("comboSec").parentElement !== panel) panel.prepend($("comboSec"));
   hover.visible = false;
   $("coord").textContent = "—";
-  if (m !== "edit") renderBuildPanel();
+  if (m === "build" || m === "export") renderBuildPanel();
   updateHint();
   render3D();
   requestAnimationFrame(() => { resize(); renderGrid(); fitView(); });
@@ -911,6 +926,174 @@ $("dlBp").onclick = async () => {
   download(schemName(P) + ".bp", new Blob([bytes]));
   toast("Downloaded " + schemName(P) + ".bp");
 };
+/* ---------- import ---------- */
+/** The import in progress: file, settings, the blocks turned to face the street, and the plan. */
+let imp = { data: null, s: null, turned: null, plan: null };
+
+function startImport() {
+  imp = { data: null, s: null, turned: null, plan: null };
+  $("impFileName").textContent = "No file chosen yet.";
+  $("impSettings").hidden = true;
+  setMode("import");
+  renderImport();
+}
+function endImport() {
+  imp = { data: null, s: null, turned: null, plan: null };
+  setMode("edit");
+}
+$("importBtn").onclick = startImport;
+$("impCancel").onclick = endImport;
+
+$("impFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const gunzip = async (b) => new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+    const data = await readSchematicFile(f.name, bytes, gunzip);
+    if (!data.blocks.size) return toast("That file has no blocks in it.");
+    imp.data = data;
+    imp.s = guessSettings(data.blocks, P);
+    imp.name = data.name;
+    $("impFileName").textContent = `${f.name}: ${data.blocks.size.toLocaleString()} blocks`;
+    $("impSettings").hidden = false;
+    refreshImport(true);
+  } catch (err) {
+    toast("Couldn't read that file: " + err.message);
+  }
+};
+
+/** Recomputes the turned blocks and the plan after a setting changes. */
+function refreshImport(refit = false) {
+  if (!imp.data) return renderImport();
+  imp.turned = turnBlocks(imp.data.blocks, imp.s.turns);
+  imp.plan = planImport({ ...imp.data, name: imp.name }, imp.s, P);
+  renderImport();
+  render3D();
+  if (refit) fitView();
+}
+
+function renderImport() {
+  const s = imp.s;
+  if (!s) {
+    $("impMessages").innerHTML = `<li class="warn">Choose a file to import.</li>`;
+    $("impHeights").hidden = true;
+    $("impGo").disabled = true;
+    return;
+  }
+  const e = extent(imp.turned);
+  const range = (id, min, max, v) => { const el = $(id); el.min = min; el.max = max; el.value = v; $(id + "Val").textContent = v; };
+  range("impCore", e.zMin, e.zMax, s.core);
+  range("impLeft", e.xMin, e.xMax, s.left);
+  range("impRight", e.xMin, e.xMax, s.right);
+  range("impBottom", e.yMin, e.yMax, s.bottom);
+  range("impTop", e.yMin, e.yMax, s.top);
+  $("impCoreVal").textContent = `z = ${s.core}`;
+  $("impModeFacade").checked = s.mode === "facade";
+  $("impModeStage").checked = s.mode === "stage";
+  $("impSplit").hidden = $("impSplitHint").hidden = s.mode !== "facade";
+  $("impStageFld").hidden = s.mode !== "stage";
+  $("impBaseH").value = s.baseH; $("impBodyH").value = s.bodyH; $("impCapH").value = s.capH;
+  $("impStage").value = s.stage;
+  $("impName").value = imp.name;
+
+  const plan = imp.plan;
+  $("impMessages").innerHTML = plan.messages.map(([t, m]) => `<li class="${t}">${escapeHtml(m)}</li>`).join("");
+  const hc = plan.heightChanges;
+  $("impHeights").hidden = !hc.length;
+  if (hc.length) {
+    $("impHeightsText").textContent = hc.map((c) => `${STAGE_NAMES[c.kind]} is ${c.from} high; the import is ${c.to}.`).join(" ");
+    imp.heights ??= "crop";
+    $("impHeightCrop").checked = imp.heights === "crop";
+    $("impHeightStage").checked = imp.heights === "stage";
+  }
+  $("impGo").disabled = plan.messages.some((m) => m[0] === "err");
+}
+
+/** Draws the import: chosen blocks solid, the rest faded, with the Core Wall, middle and stage splits. */
+function renderImport3D(accent, muted, fg) {
+  $("viewtag").innerHTML = imp.data ? `Import <small>${escapeHtml(imp.data.name)}</small>` : "Import";
+  if (!imp.turned) return;
+  const s = imp.s, e = extent(imp.turned), rows = importRows(s);
+  for (const [k, st] of imp.turned) {
+    const [x, y, z] = unK(k);
+    // Solid where a block will be imported; faded elsewhere (outside the edges, or
+    // floors between the body and the capital that a whole-facade import skips).
+    const inside = x >= s.left && x <= s.right && rows.some((r) => y >= r.y0 && y <= r.y1);
+    world.add(blockObject(st, x, y, z, inside ? 1 : 0.18));
+  }
+  // The Core Wall layer, across the chosen edges and rows
+  boxEdges(helpers, s.left - 0.5, s.bottom, s.core - 0.5, s.right + 0.5, s.top + 1, s.core + 0.5, accent, 0.95);
+  // The middle: it becomes x = 0
+  const mid = (s.left + s.right) / 2;
+  addLines(helpers, [[mid, s.bottom - 0.6, e.zMax + 0.6], [mid, s.top + 1.6, e.zMax + 0.6]], accent, 1, true);
+  const ml = textSprite("middle → x = 0", accent);
+  ml.position.set(mid - 0.3, s.top + 2, e.zMax + 0.6);
+  helpers.add(ml);
+  // Stage splits
+  for (const r of importRows(s)) {
+    if (r.y1 < r.y0) continue;
+    addLines(helpers, [[s.left - 1.6, r.y0, e.zMax + 0.6], [s.right + 0.5, r.y0, e.zMax + 0.6], [s.left - 1.6, r.y1 + 1, e.zMax + 0.6], [s.right + 0.5, r.y1 + 1, e.zMax + 0.6]], muted, 0.6);
+    const t = textSprite(STAGE_NAMES[r.kind].toUpperCase(), fg);
+    t.position.set(s.left - 1.8, (r.y0 + r.y1 + 1) / 2, e.zMax + 0.6);
+    helpers.add(t);
+  }
+}
+
+function importClick(ev) {
+  if (!imp.turned) return;
+  const h = hitAt(ev);
+  if (!h) return;
+  imp.s.core = h.cell[2];
+  refreshImport();
+  toast(`Core Wall set to layer z = ${imp.s.core}`);
+}
+
+const impSet = (id, fn, ev = "input") => $(id).addEventListener(ev, (e) => { if (!imp.s) return; fn(e.target); refreshImport(); });
+impSet("impCore", (t) => { imp.s.core = +t.value; });
+impSet("impLeft", (t) => { imp.s.left = +t.value; });
+impSet("impRight", (t) => { imp.s.right = +t.value; });
+impSet("impBottom", (t) => { imp.s.bottom = +t.value; });
+impSet("impTop", (t) => { imp.s.top = +t.value; });
+impSet("impModeFacade", () => { imp.s.mode = "facade"; }, "change");
+impSet("impModeStage", () => { imp.s.mode = "stage"; }, "change");
+impSet("impBaseH", (t) => { imp.s.baseH = Math.max(1, parseInt(t.value, 10) || 1); }, "change");
+impSet("impBodyH", (t) => { imp.s.bodyH = Math.max(1, parseInt(t.value, 10) || 1); }, "change");
+impSet("impCapH", (t) => { imp.s.capH = Math.max(1, parseInt(t.value, 10) || 1); }, "change");
+impSet("impStage", (t) => { imp.s.stage = t.value; }, "change");
+impSet("impName", (t) => { imp.name = t.value.trim() || imp.data.name; }, "change");
+$("impHeightCrop").onchange = () => { imp.heights = "crop"; };
+$("impHeightStage").onchange = () => { imp.heights = "stage"; };
+const turn = (d) => {
+  if (!imp.data) return;
+  // Turning changes every coordinate, so start again from fresh guesses for the new facing.
+  imp.s = { ...guessSettings(imp.data.blocks, P, imp.s.turns + d), mode: imp.s.mode, stage: imp.s.stage };
+  refreshImport(true);
+};
+$("impTurnL").onclick = () => turn(1);
+$("impTurnR").onclick = () => turn(-1);
+
+$("impGo").onclick = () => {
+  if (!imp.plan) return;
+  snapshot();
+  try {
+    applyImport(P, imp.plan, imp.heights || "crop");
+  } catch (err) {
+    undoStack.pop();
+    return toast(err.message);
+  }
+  const first = imp.plan.variants[0];
+  const n = imp.plan.variants.length;
+  ui.stage = first.kind;
+  for (const v of imp.plan.variants) ui.sel[v.kind] = P.stages[v.kind].length - 1;
+  endImport();
+  afterStructural();
+  document.querySelectorAll(".stagetabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.stage === ui.stage)));
+  fitView();
+  toast(`Imported ${n} variant${n === 1 ? "" : "s"}. Ctrl+Z undoes it.`);
+};
+
 /* ---------- colours ---------- */
 const woolColour = (c) => BMAP["minecraft:" + c + "_wool"].color;
 

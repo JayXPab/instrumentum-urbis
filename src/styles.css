@@ -39,6 +39,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .topctl label{color:var(--muted);font-size:12px}
 
 .work{flex:1;min-height:0;display:grid;grid-template-columns:290px minmax(0,1fr) 310px;gap:12px}
+/* The import panel comes after the view in the page; show it on the left. */
+#leftImport{order:-1}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:auto;min-width:0}
 .sec{padding:14px 14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
 .sec:last-child{border-bottom:0}
