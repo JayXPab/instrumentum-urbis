@@ -15,8 +15,9 @@
 // with full blocks underneath down to the lower neighbour, so the roof
 // has no holes. The triangular ends are filled ("gable" / "party").
 
-import { bounds } from "./facade.js";
+import { bounds, uid } from "./facade.js";
 import { buildingDepth } from "./assemble.js";
+import { MMAP, MATERIALS, makeState } from "./blocks.js";
 
 export const ROOF_TYPES = /** @type {const} */ (["gable", "sloped", "mansard", "convex", "flat", "garden"]);
 export const ROOF_NAMES = {
@@ -141,5 +142,100 @@ function flatShape(f, style) {
         if (garden) out.push({ x, y: 1, z, part: "plant", p: 0 });
       }
     }
+  return out;
+}
+
+/* ---------- materials ---------- */
+
+/**
+ * A roof style with every setting filled in.
+ * bands: eaves (first) to ridge (last); each band is a weighted mix of materials.
+ * blend: how far bands mix into each other, 0 (sharp line) .. 1 (one band wide).
+ */
+export const roofDefaults = (o = {}) => ({
+  id: uid(),
+  name: "Roof",
+  type: "gable",
+  ridge: "parallel",
+  height: 4,
+  edge: 0,
+  flip: false,
+  bands: [{ mix: [{ material: "deepslate_tiles", weight: 1 }] }],
+  blend: 0.6,
+  gableBlock: null, // null = the project's Core Wall block
+  parapet: false,
+  parapetBlock: "minecraft:stone_bricks",
+  density: 0.4,
+  ...o,
+});
+
+/** Picks one entry from [{..., weight}] by weight. */
+function weighted(list, rnd) {
+  const tot = list.reduce((s, e) => s + Math.max(0, e.weight), 0);
+  if (tot <= 0) return list[0];
+  let r = rnd() * tot;
+  for (const e of list) {
+    r -= Math.max(0, e.weight);
+    if (r < 0) return e;
+  }
+  return list[list.length - 1];
+}
+
+/**
+ * Which material a piece gets: its band by height (with a soft, random
+ * edge between bands), then a weighted pick within the band.
+ * @param {number} pos 0 at the eaves .. 1 at the ridge
+ */
+export function pickMaterial(style, pos, rnd) {
+  const bands = (style.bands || []).filter((b) => b.mix && b.mix.some((m) => MMAP[m.material] && m.weight > 0));
+  if (!bands.length) return MATERIALS[0];
+  const t = pos * bands.length + (rnd() - 0.5) * (style.blend ?? 0.6);
+  const band = bands[Math.max(0, Math.min(bands.length - 1, Math.floor(t)))];
+  return MMAP[weighted(band.mix.filter((m) => MMAP[m.material]), rnd).material];
+}
+
+/** What grows on a garden roof, by weight. Tall grass takes two blocks. */
+export const PLANTS = [
+  ["short_grass", 50], ["tall_grass", 8],
+  ["poppy", 5], ["dandelion", 5], ["cornflower", 4], ["oxeye_daisy", 4], ["allium", 3],
+  ["azure_bluet", 4], ["red_tulip", 3], ["white_tulip", 3], ["lily_of_the_valley", 3],
+  ["azalea", 4], ["flowering_azalea", 3],
+].map(([id, weight]) => ({ id: "minecraft:" + id, weight }));
+
+/**
+ * The roof's blocks, placed on top of a building whose top is at y0.
+ * @param {any} p project
+ * @param {any} style roof style
+ * @param {number} y0 height of the building (the roof starts here)
+ * @param {() => number} rnd seeded random numbers
+ * @param {(() => string|null)} [party] picks a party-wall block, or null if there are none
+ * @returns {Array<{x:number, y:number, z:number, s:string}>}
+ */
+export function roofBlocks(p, style, y0, rnd, party = () => null) {
+  const st = roofDefaults(style);
+  const gable = st.gableBlock || p.coreBlock;
+  const out = [];
+  for (const c of roofShape(p, st)) {
+    let s = null;
+    switch (c.part) {
+      case "block": s = pickMaterial(st, c.p, rnd).block; break;
+      case "slab": s = makeState(pickMaterial(st, c.p, rnd).slab, { type: "bottom" }); break;
+      case "stairs": s = makeState(pickMaterial(st, c.p, rnd).stairs, { facing: c.facing, half: "bottom" }); break;
+      case "gable": s = gable; break;
+      case "party": s = party() || gable; break;
+      case "parapet": s = st.parapetBlock; break;
+      case "soil": s = "minecraft:grass_block"; break;
+      case "plant": {
+        if (rnd() >= st.density) break;
+        const plant = weighted(PLANTS, rnd).id;
+        if (plant === "minecraft:tall_grass") {
+          out.push({ x: c.x, y: y0 + c.y + 1, z: c.z, s: plant + "[half=upper]" });
+          s = plant + "[half=lower]";
+        } else s = plant;
+        break;
+      }
+    }
+    if (s) out.push({ x: c.x, y: y0 + c.y, z: c.z, s });
+  }
   return out;
 }

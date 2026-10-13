@@ -2,7 +2,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { roofShape, outline, footprint } from "../src/core/roof.js";
+import { roofShape, outline, footprint, roofBlocks, pickMaterial, roofDefaults } from "../src/core/roof.js";
+import { BMAP, MATERIALS, parseState } from "../src/core/blocks.js";
+import { mulberry32 } from "../src/core/assemble.js";
 import { K } from "../src/core/facade.js";
 import { sampleProject } from "../src/core/sample.js";
 
@@ -130,4 +132,71 @@ test("garden roofs are walled, with soil and a planting spot on every inner cell
   assert.equal(inner.length, g.filter((c) => c.part === "plant").length);
   assert.equal(inner.length, (7 - 2) * (9 - 2));
   assert.ok(g.filter((c) => c.part === "parapet").every((c) => c.y <= 1));
+});
+
+/* ---------- materials ---------- */
+
+test("every roof material has a full block, stairs and slab in the catalogue", () => {
+  for (const m of MATERIALS) {
+    assert.equal(BMAP[m.block]?.shape, "cube", m.block);
+    assert.equal(BMAP[m.stairs]?.shape, "stairs", m.stairs);
+    assert.equal(BMAP[m.slab]?.shape, "slab", m.slab);
+  }
+});
+
+test("roof pieces become the material's stairs, slabs and blocks", () => {
+  const p = sampleProject();
+  const bl = roofBlocks(p, style({ height: 3 }), 20, mulberry32(1));
+  const ids = new Set(bl.map((b) => parseState(b.s).id));
+  for (const id of ["minecraft:deepslate_tiles", "minecraft:deepslate_tile_stairs", "minecraft:deepslate_tile_slab"]) assert.ok(ids.has(id), id);
+  assert.ok(bl.every((b) => b.y >= 20), "starts on top of the building");
+  const stair = bl.find((b) => b.s.includes("_stairs"));
+  assert.match(stair.s, /facing=(north|south),half=bottom/);
+});
+
+test("gradient bands run from eaves to ridge", () => {
+  const st = roofDefaults({ blend: 0, bands: [{ mix: [{ material: "bricks", weight: 1 }] }, { mix: [{ material: "copper", weight: 1 }] }] });
+  const r = mulberry32(3);
+  assert.equal(pickMaterial(st, 0, r).id, "bricks");
+  assert.equal(pickMaterial(st, 0.3, r).id, "bricks");
+  assert.equal(pickMaterial(st, 0.7, r).id, "copper");
+  assert.equal(pickMaterial(st, 1, r).id, "copper");
+});
+
+test("a soft blend mixes neighbouring bands near the border only", () => {
+  const st = roofDefaults({ blend: 0.8, bands: [{ mix: [{ material: "bricks", weight: 1 }] }, { mix: [{ material: "copper", weight: 1 }] }] });
+  const r = mulberry32(4);
+  const at = (pos) => [...Array(400)].map(() => pickMaterial(st, pos, r).id);
+  const mid = at(0.5);
+  assert.ok(mid.includes("bricks") && mid.includes("copper"), "mixed at the border");
+  assert.ok(at(0).every((m) => m === "bricks"), "pure at the eaves");
+});
+
+test("within a band, materials are mixed by weight", () => {
+  const st = roofDefaults({ bands: [{ mix: [{ material: "bricks", weight: 3 }, { material: "mud_bricks", weight: 1 }] }] });
+  const r = mulberry32(5);
+  const picks = [...Array(4000)].map(() => pickMaterial(st, 0.5, r).id);
+  const share = picks.filter((m) => m === "bricks").length / picks.length;
+  assert.ok(share > 0.7 && share < 0.8, "about three quarters bricks, got " + share);
+});
+
+test("gable ends use party-wall blocks, or the gable block at a street front", () => {
+  const p = sampleProject();
+  const party = roofBlocks(p, style({}), 0, mulberry32(1), () => "minecraft:mud_bricks");
+  assert.ok(party.some((b) => b.s === "minecraft:mud_bricks"));
+  const front = roofBlocks(p, style({ ridge: "street", gableBlock: "minecraft:quartz_block" }), 0, mulberry32(1));
+  assert.ok(front.some((b) => b.s === "minecraft:quartz_block" && b.z === 0));
+});
+
+test("garden density sets how much grows, and the same seed grows the same garden", () => {
+  const p = sampleProject();
+  const plants = (d, seed) => roofBlocks(p, { type: "garden", density: d }, 0, mulberry32(seed))
+    .filter((b) => BMAP[parseState(b.s).id]?.shape === "plant" && !b.s.includes("half=upper"));
+  assert.equal(plants(0, 1).length, 0);
+  assert.equal(plants(1, 1).length, 5 * 7);
+  assert.deepEqual(plants(0.5, 9), plants(0.5, 9));
+  const all = roofBlocks(p, { type: "garden", density: 1 }, 0, mulberry32(2));
+  for (const low of all.filter((b) => b.s === "minecraft:tall_grass[half=lower]"))
+    assert.ok(all.some((b) => b.s === "minecraft:tall_grass[half=upper]" && b.x === low.x && b.z === low.z && b.y === low.y + 1));
+  assert.ok(all.some((b) => b.s === "minecraft:grass_block"));
 });

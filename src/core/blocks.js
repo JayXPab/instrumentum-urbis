@@ -4,7 +4,7 @@
 // Colours are flat approximations used only for the editor preview;
 // they are not Minecraft textures.
 
-/** @typedef {{group:string, id:string, name:string, color:string, shape:"cube"|"stairs"|"slab"|"pane", opacity:number}} BlockDef */
+/** @typedef {{group:string, id:string, name:string, color:string, shape:"cube"|"stairs"|"slab"|"pane"|"plant", opacity:number}} BlockDef */
 
 /** @type {BlockDef[]} */
 export const BLOCKS = [
@@ -39,10 +39,63 @@ export const BLOCKS = [
   ["Slabs", "minecraft:smooth_stone_slab", "Smooth Stone Slab", "#a0a0a0", "slab"],
   ["Slabs", "minecraft:quartz_slab", "Quartz Slab", "#ebe5dd", "slab"],
   ["Slabs", "minecraft:dark_oak_slab", "Dark Oak Slab", "#46301a", "slab"],
+  ["Slabs", "minecraft:brick_slab", "Brick Slab", "#94604f", "slab"],
+  // Roof materials: each full block has matching stairs and slab (see MATERIALS).
+  ["Roof", "minecraft:deepslate_tiles", "Deepslate Tiles", "#36363a", "cube"],
+  ["Roof", "minecraft:deepslate_tile_stairs", "Deepslate Tile Stairs", "#36363a", "stairs"],
+  ["Roof", "minecraft:deepslate_tile_slab", "Deepslate Tile Slab", "#36363a", "slab"],
+  ["Roof", "minecraft:spruce_stairs", "Spruce Stairs", "#735632", "stairs"],
+  ["Roof", "minecraft:spruce_slab", "Spruce Slab", "#735632", "slab"],
+  ["Roof", "minecraft:waxed_cut_copper", "Waxed Cut Copper", "#bf6b51", "cube"],
+  ["Roof", "minecraft:waxed_cut_copper_stairs", "Waxed Cut Copper Stairs", "#bf6b51", "stairs"],
+  ["Roof", "minecraft:waxed_cut_copper_slab", "Waxed Cut Copper Slab", "#bf6b51", "slab"],
+  ["Roof", "minecraft:waxed_oxidized_cut_copper", "Waxed Oxidized Cut Copper", "#4f9e8a", "cube"],
+  ["Roof", "minecraft:waxed_oxidized_cut_copper_stairs", "Waxed Oxidized Cut Copper Stairs", "#4f9e8a", "stairs"],
+  ["Roof", "minecraft:waxed_oxidized_cut_copper_slab", "Waxed Oxidized Cut Copper Slab", "#4f9e8a", "slab"],
+  ["Roof", "minecraft:polished_blackstone_brick_stairs", "Blackstone Brick Stairs", "#38323b", "stairs"],
+  ["Roof", "minecraft:polished_blackstone_brick_slab", "Blackstone Brick Slab", "#38323b", "slab"],
+  ["Roof", "minecraft:mud_brick_stairs", "Mud Brick Stairs", "#8a6a50", "stairs"],
+  ["Roof", "minecraft:mud_brick_slab", "Mud Brick Slab", "#8a6a50", "slab"],
+  // Garden roofs
+  ["Garden", "minecraft:grass_block", "Grass Block", "#5d8c3a", "cube"],
+  ["Garden", "minecraft:short_grass", "Short Grass", "#6a9a3e", "plant"],
+  ["Garden", "minecraft:tall_grass", "Tall Grass", "#6a9a3e", "plant"],
+  ["Garden", "minecraft:poppy", "Poppy", "#c0302a", "plant"],
+  ["Garden", "minecraft:dandelion", "Dandelion", "#e8d23a", "plant"],
+  ["Garden", "minecraft:cornflower", "Cornflower", "#4a6ad8", "plant"],
+  ["Garden", "minecraft:oxeye_daisy", "Oxeye Daisy", "#e4e4da", "plant"],
+  ["Garden", "minecraft:allium", "Allium", "#a860d0", "plant"],
+  ["Garden", "minecraft:azure_bluet", "Azure Bluet", "#d0dae4", "plant"],
+  ["Garden", "minecraft:red_tulip", "Red Tulip", "#d03030", "plant"],
+  ["Garden", "minecraft:white_tulip", "White Tulip", "#ececec", "plant"],
+  ["Garden", "minecraft:lily_of_the_valley", "Lily of the Valley", "#f4f4f4", "plant"],
+  ["Garden", "minecraft:azalea", "Azalea", "#5a7d2a", "plant"],
+  ["Garden", "minecraft:flowering_azalea", "Flowering Azalea", "#7d8d4a", "plant"],
 ].map(([group, id, name, color, shape, opacity]) => ({ group, id, name, color, shape, opacity: opacity ?? 1 }));
 
 /** @type {Record<string, BlockDef>} */
 export const BMAP = Object.fromEntries(BLOCKS.map((b) => [b.id, b]));
+
+/**
+ * Roof materials: a full block with its matching stairs and slab.
+ * @typedef {{id:string, name:string, block:string, stairs:string, slab:string}} Material
+ * @type {Material[]}
+ */
+export const MATERIALS = [
+  ["deepslate_tiles", "Deepslate Tiles", "deepslate_tiles", "deepslate_tile_stairs", "deepslate_tile_slab"],
+  ["bricks", "Bricks", "bricks", "brick_stairs", "brick_slab"],
+  ["stone_bricks", "Stone Bricks", "stone_bricks", "stone_brick_stairs", "stone_brick_slab"],
+  ["dark_oak", "Dark Oak", "dark_oak_planks", "dark_oak_stairs", "dark_oak_slab"],
+  ["spruce", "Spruce", "spruce_planks", "spruce_stairs", "spruce_slab"],
+  ["copper", "Copper", "waxed_cut_copper", "waxed_cut_copper_stairs", "waxed_cut_copper_slab"],
+  ["oxidized_copper", "Oxidized Copper", "waxed_oxidized_cut_copper", "waxed_oxidized_cut_copper_stairs", "waxed_oxidized_cut_copper_slab"],
+  ["blackstone", "Blackstone Bricks", "polished_blackstone_bricks", "polished_blackstone_brick_stairs", "polished_blackstone_brick_slab"],
+  ["mud_bricks", "Mud Bricks", "mud_bricks", "mud_brick_stairs", "mud_brick_slab"],
+].map(([id, name, block, stairs, slab]) => ({
+  id, name, block: "minecraft:" + block, stairs: "minecraft:" + stairs, slab: "minecraft:" + slab,
+}));
+/** @type {Record<string, Material>} */
+export const MMAP = Object.fromEntries(MATERIALS.map((m) => [m.id, m]));
 
 /**
  * Splits a block state string such as
@@ -76,9 +129,14 @@ const SHAPE_DEFAULTS = {
   slab: { type: "bottom", waterlogged: "false" },
   pane: { north: "false", south: "false", east: "false", west: "false", waterlogged: "false" },
   cube: {},
+  plant: {},
 };
 /** Blocks whose properties differ from the rest of their shape. */
-const ID_DEFAULTS = { "minecraft:quartz_pillar": { axis: "y" } };
+const ID_DEFAULTS = {
+  "minecraft:quartz_pillar": { axis: "y" },
+  "minecraft:grass_block": { snowy: "false" },
+  "minecraft:tall_grass": { half: "lower" },
+};
 
 /**
  * Fills in every property Minecraft expects, keeping the ones already set.
