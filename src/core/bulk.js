@@ -2,30 +2,32 @@
 // which ones a bulk export includes. Pure functions, no DOM, no three.js.
 //
 // A combination is one base, one body and one capital variant and one roof
-// style (by index) plus a floor count. With no roof styles, roof is 0 and the
+// style (by index) plus a floor count and a depth. With no roof styles, roof is 0 and the
 // building has a flat top. Each gets its own party-wall seed, worked out from the
 // project's bulk seed, so exporting again gives exactly the same buildings.
 
-import { comboCount, mulberry32 } from "./assemble.js";
+import { comboCount, mulberry32, buildingDepth } from "./assemble.js";
 
-/** @typedef {{base:number, body:number, capital:number, roof:number, floors:number}} Combo */
+/** @typedef {{base:number, body:number, capital:number, roof:number, floors:number, depth:number}} Combo */
 
 /** Bulk export settings saved with the project. amount null = all combinations. */
 export const bulkDefaults = () => ({ format: "bp", amount: null, random: false, seed: 1, limit: 200 });
 
 /**
- * The i-th combination, counting floors fastest, then roof, capital, body, base.
+ * The i-th combination, counting floors fastest, then depth, roof, capital, body, base.
  * @returns {Combo}
  */
 export function comboAt(p, i) {
   const r = p.floorMax - p.floorMin + 1;
   const nc = p.stages.capital.length, nb = p.stages.body.length;
   const nr = Math.max(1, (p.roofs || []).length);
+  const nd = Math.max(1, p.depthMax - p.depthMin + 1);
   const floors = p.floorMin + (i % r); i = Math.floor(i / r);
+  const depth = p.depthMin + (i % nd); i = Math.floor(i / nd);
   const roof = i % nr; i = Math.floor(i / nr);
   const capital = i % nc; i = Math.floor(i / nc);
   const body = i % nb; i = Math.floor(i / nb);
-  return { base: i, body, capital, roof, floors };
+  return { base: i, body, capital, roof, floors, depth };
 }
 
 /** Mixes numbers into one well-spread 32-bit seed. */
@@ -41,8 +43,9 @@ export function hash32(...xs) {
 }
 
 /**
- * Party-wall seed for one combination in a bulk run. The roof is left out on
- * purpose: the same building under a different roof keeps the same walls.
+ * Party-wall seed for one combination in a bulk run. Roof and depth are left
+ * out on purpose: the same building with a different roof or depth keeps the
+ * same wall pattern.
  */
 export const buildingSeed = (seed, c) => hash32(seed, c.base, c.body, c.capital, c.floors);
 
@@ -91,11 +94,11 @@ const csv = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')
  * @param {Array<{file:string, p:any, blocks:number}>} rows p is the project from forCombo
  */
 export function indexCsv(rows) {
-  const head = ["file", "base", "body", "capital", "roof", "floors", "seed", "blocks"];
+  const head = ["file", "base", "body", "capital", "roof", "floors", "depth", "seed", "blocks"];
   const lines = rows.map(({ file, p, blocks }) => {
     const a = p.assembly;
     const roof = p.roofs?.length ? p.roofs[a.roof].name : "";
-    return [file, p.stages.base[a.base].name, p.stages.body[a.body].name, p.stages.capital[a.capital].name, roof, a.floors, a.seed, blocks]
+    return [file, p.stages.base[a.base].name, p.stages.body[a.body].name, p.stages.capital[a.capital].name, roof, a.floors, buildingDepth(p), a.seed, blocks]
       .map(csv).join(",");
   });
   return [head.join(","), ...lines].join("\r\n") + "\r\n";

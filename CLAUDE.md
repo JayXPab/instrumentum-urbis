@@ -43,6 +43,7 @@ src/core/             the facade rules: NO DOM, NO three.js
   facade.js           coordinates, bounds, mirror rule, variants, validation
   assemble.js         stacking stages into a building, party walls, combination count
   sample.js           the sample facade the editor opens with
+  project.js          loading: upgrades older project formats, fills defaults
   nbt.js              NBT (Minecraft binary format) writer/reader, varints
   schem.js            assembled building -> Sponge v3 .schem; pane connections
   blueprint.js        assembled building -> Axiom .bp (16³ sections, file layout)
@@ -77,7 +78,11 @@ ported to Java for the mod, and the part the tests cover.
 - **Floors**: minimum 3 (one base, one body, one capital). Extra floors repeat
   the body. Within one building, every body floor is the **same variant**;
   variety comes between buildings, not between floors.
-- **Combinations** = bases × bodies × capitals × floor counts in range.
+- **Combinations** = bases × bodies × capitals × roofs × floor counts × depths
+  (floor range and depth range both inclusive).
+- **Depth range**: how far back the building goes, Core Wall to back wall. Never
+  less than the facade's back depth + 2. The `_Nd` file-name part and ", N deep"
+  in titles appear only when the range has more than one value.
 - **Depth rule**: a facade is never thicker than its width. Front depth and back
   depth must each be ≤ xMax (half the width). The editor enforces this.
 - **Party walls**: for buildings that stand wall to wall, the side walls (outer
@@ -152,9 +157,13 @@ ported to Java for the mod, and the part the tests cover.
 
 The editor saves the project in the browser (localStorage key
 `instrumentum-urbis.project.v1`) and can copy or load it as JSON. The JSON has
-`format: "instrumentum-urbis/facade"` and `formatVersion: 1`. If the shape
-changes, bump `formatVersion` and keep loading older files. Optional additions
-that fill in defaults on load (like `bulk`, added after v1) don't need a bump.
+`format: "instrumentum-urbis/facade"` and `formatVersion: 2`. If the shape
+changes, bump `formatVersion` and keep loading older files: `upgradeProject` in
+`src/core/project.js` brings any older file up to date (its header lists the
+versions). Optional additions that fill in defaults on load (like `bulk`) don't
+need a bump.
+
+- v1: one `buildingDepth`. v2: `depthMin`/`depthMax` and `assembly.depth`.
 
 ## Roadmap
 

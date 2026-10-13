@@ -16,8 +16,11 @@ export function mulberry32(a) {
   };
 }
 
-/** Depth of the whole building in blocks, never shallower than the facade itself. */
-export const buildingDepth = (p) => Math.max(p.buildingDepth, -bounds(p).zMin + 2);
+/** Shallowest building the facade allows: its recesses plus a back wall. */
+export const minDepth = (p) => -bounds(p).zMin + 2;
+
+/** Depth of the chosen building in blocks: assembly.depth within the depth range, never shallower than the facade allows. */
+export const buildingDepth = (p) => Math.max(clamp(p.assembly.depth ?? p.depthMin, p.depthMin, p.depthMax), minDepth(p));
 
 /**
  * @typedef {{s:string, kind:"base"|"body"|"capital"|"party"|"roof", copy?:number}} Cell
@@ -113,12 +116,14 @@ export function buildingTitle(p) {
   const floors = clamp(a.floors, p.floorMin, p.floorMax);
   const n = (kind, i) => p.stages[kind][i]?.name ?? "?";
   const roof = roofOf(p);
-  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors`;
+  const deep = p.depthMax > p.depthMin ? `, ${buildingDepth(p)} deep` : "";
+  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors${deep}`;
 }
 
-/** Number of distinct buildings the current variants and floor range can make. */
+/** Number of distinct buildings the current variants, roofs, floor range and depth range can make. */
 export function comboCount(p) {
   const r = Math.max(0, p.floorMax - p.floorMin + 1);
   const roofs = Math.max(1, (p.roofs || []).length);
-  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r, r, roofs };
+  const depths = Math.max(0, p.depthMax - p.depthMin + 1);
+  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r * depths, r, roofs, depths };
 }

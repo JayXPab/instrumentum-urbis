@@ -67,6 +67,9 @@ export function checks(p) {
     out.push(["err", `Facade depth can’t exceed half the width (max ${b.xMax} each way at width ${p.width}).`]);
   if (p.floorMin < 3) out.push(["err", "Floor range must start at 3 or more."]);
   if (p.floorMax < p.floorMin) out.push(["err", "Floor range maximum is below the minimum."]);
+  if (p.depthMax < p.depthMin) out.push(["err", "Depth range maximum is below the minimum."]);
+  // The building must be deep enough for the facade's recesses plus a back wall.
+  if (p.depthMin < p.depthBack + 2) out.push(["err", `Depth range must start at ${p.depthBack + 2} or more for this facade.`]);
   for (const k of STAGES)
     p.stages[k].forEach((v) => {
       let gaps = 0;

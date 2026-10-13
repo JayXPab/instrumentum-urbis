@@ -8,7 +8,8 @@ import {
   STAGES, STAGE_NAMES, K, unK, uid, clamp, bounds, mirrorX, axisX,
   newVariant, pruneAll, checks, validProject,
 } from "../core/facade.js";
-import { assemble, comboCount, buildingDepth } from "../core/assemble.js";
+import { assemble, comboCount, buildingDepth, minDepth } from "../core/assemble.js";
+import { upgradeProject } from "../core/project.js";
 import { sampleProject } from "../core/sample.js";
 import { toSchem, schemName } from "../core/schem.js";
 import { blueprintParts, packBlueprint } from "../core/blueprint.js";
@@ -40,9 +41,7 @@ function save() {
 /** The project: everything that gets saved. */
 let P = loadStored();
 if (!validProject(P)) P = sampleProject();
-P.bulk = { ...bulkDefaults(), ...P.bulk };
-P.roofs = (P.roofs || []).map((r) => roofDefaults(r));
-P.assembly.roof ??= 0;
+upgradeProject(P);
 
 /** Editor-only state: never saved. */
 const ui = {
@@ -229,7 +228,7 @@ function render3D() {
       addLines(helpers, [[b.xMin - 1.6, A.height, b.zMax + 0.6], [b.xMax + 0.5, A.height, b.zMax + 0.6]], muted, 0.55);
     }
     const gp = [];
-    const R = Math.max(P.width, P.buildingDepth) + 6;
+    const R = Math.max(P.width, buildingDepth(P)) + 6;
     for (let i = -R; i <= R; i++) { gp.push([i - 0.5, 0, -R], [i - 0.5, 0, R]); gp.push([-R, 0, i - 0.5], [R, 0, i - 0.5]); }
     addLines(helpers, gp, muted, 0.12);
   }
@@ -588,7 +587,17 @@ function renderBuildPanel() {
   else { $("pickRoof").innerHTML = "<option>Flat top (no roof styles yet)</option>"; $("pickRoof").disabled = true; }
   $("fMin").value = P.floorMin;
   $("fMax").value = P.floorMax;
-  $("bDepth").value = P.buildingDepth;
+  $("dMin").value = P.depthMin;
+  $("dMax").value = P.depthMax;
+  $("dMin").min = $("dMax").min = minDepth(P);
+  const dr = $("depth");
+  dr.min = P.depthMin;
+  dr.max = Math.max(P.depthMin, P.depthMax);
+  a.depth = clamp(a.depth, P.depthMin, Math.max(P.depthMin, P.depthMax));
+  dr.value = a.depth;
+  $("depthVal").textContent = `${buildingDepth(P)} blocks`;
+  // Only worth a slider when there is a range to choose from.
+  $("depthFld").hidden = P.depthMax <= P.depthMin;
   const fr = $("floors");
   fr.min = P.floorMin;
   fr.max = Math.max(P.floorMin, P.floorMax);
@@ -598,7 +607,9 @@ function renderBuildPanel() {
   const { n, r } = comboCount(P);
   $("comboN").textContent = n.toLocaleString();
   const roofs = P.roofs.length ? ` × ${P.roofs.length} roof${P.roofs.length === 1 ? "" : "s"}` : "";
-  $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}`;
+  const nd = Math.max(0, P.depthMax - P.depthMin + 1);
+  const depths = nd > 1 ? ` × ${nd} depths` : "";
+  $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}${depths}`;
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
     $("schemInfo").textContent = `${schemName(P)}: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. Paste point: bottom of the Core Wall’s centre column.`;
@@ -726,7 +737,11 @@ $("floors").addEventListener("input", (e) => { P.assembly.floors = +e.target.val
 $("floors").addEventListener("change", () => fitView());
 $("fMin").onchange = (e) => { snapshot(); P.floorMin = clamp(parseInt(e.target.value, 10) || 3, 3, 200); if (P.floorMax < P.floorMin) P.floorMax = P.floorMin; afterStructural(); };
 $("fMax").onchange = (e) => { snapshot(); P.floorMax = clamp(parseInt(e.target.value, 10) || 3, 3, 200); if (P.floorMax < P.floorMin) P.floorMin = P.floorMax; afterStructural(); };
-$("bDepth").onchange = (e) => { snapshot(); P.buildingDepth = clamp(parseInt(e.target.value, 10) || 3, 3, 64); afterEdit(); fitView(); };
+const depthIn = (v) => clamp(parseInt(v, 10) || minDepth(P), minDepth(P), 64);
+$("dMin").onchange = (e) => { snapshot(); P.depthMin = depthIn(e.target.value); if (P.depthMax < P.depthMin) P.depthMax = P.depthMin; afterStructural(); fitView(); };
+$("dMax").onchange = (e) => { snapshot(); P.depthMax = depthIn(e.target.value); if (P.depthMax < P.depthMin) P.depthMin = P.depthMax; afterStructural(); fitView(); };
+$("depth").addEventListener("input", (e) => { P.assembly.depth = +e.target.value; save(); renderBuildPanel(); render3D(); });
+$("depth").addEventListener("change", () => fitView());
 $("pwAdd").onclick = () => { snapshot(); P.partyWall.push({ block: "minecraft:stone_bricks", weight: 1 }); afterEdit(); };
 $("optFade").onchange = (e) => { ui.fade = e.target.checked; render3D(); };
 $("optLabels").onchange = (e) => { ui.labels = e.target.checked; render3D(); };
@@ -738,6 +753,7 @@ $("randomize").onclick = () => {
   a.capital = Math.floor(r() * P.stages.capital.length);
   a.roof = Math.floor(r() * Math.max(1, P.roofs.length));
   a.floors = P.floorMin + Math.floor(r() * (P.floorMax - P.floorMin + 1));
+  a.depth = P.depthMin + Math.floor(r() * (P.depthMax - P.depthMin + 1));
   a.seed = Math.floor(r() * 1e9);
   save(); renderBuildPanel(); render3D(); fitView();
 };
@@ -1051,11 +1067,7 @@ function loadText(t) {
   if (!validProject(p)) return toast("That JSON isn’t an Instrumentum Urbis facade project.");
   snapshot();
   P = p;
-  P.assembly ??= { base: 0, body: 0, capital: 0, floors: P.floorMin || 3, seed: 1 };
-  P.partyWall ??= [];
-  P.bulk = { ...bulkDefaults(), ...P.bulk };
-  P.roofs = (P.roofs || []).map((r) => roofDefaults(r));
-  P.assembly.roof ??= 0;
+  upgradeProject(P);
   afterStructural();
   fitView();
   toast("Project loaded");

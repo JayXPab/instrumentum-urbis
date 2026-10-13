@@ -8,7 +8,7 @@ import { roofDefaults } from "./roof.js";
 export function sampleProject() {
   const p = {
     format: "instrumentum-urbis/facade",
-    formatVersion: 1,
+    formatVersion: 2,
     mcVersion: "1.21.11",
     width: 7,
     depthFront: 2,
@@ -18,13 +18,14 @@ export function sampleProject() {
     stages: { base: [], body: [], capital: [] },
     floorMin: 3,
     floorMax: 8,
-    buildingDepth: 9,
+    depthMin: 9,
+    depthMax: 9,
     partyWall: [
       { block: "minecraft:bricks", weight: 3 },
       { block: "minecraft:mud_bricks", weight: 1 },
       { block: "minecraft:terracotta", weight: 1 },
     ],
-    assembly: { base: 0, body: 0, capital: 0, roof: 0, floors: 5, seed: 7 },
+    assembly: { base: 0, body: 0, capital: 0, roof: 0, floors: 5, depth: 9, seed: 7 },
     roofs: [
       roofDefaults({ name: "Slate gable", type: "gable", height: 4, edge: 1 }),
       roofDefaults({

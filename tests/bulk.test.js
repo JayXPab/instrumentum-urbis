@@ -3,7 +3,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { comboAt, chooseCombos, bulkCount, forCombo, buildingSeed, indexCsv } from "../src/core/bulk.js";
-import { assemble, comboCount, buildingTitle } from "../src/core/assemble.js";
+import { assemble, comboCount, buildingTitle, buildingDepth } from "../src/core/assemble.js";
+import { schemName } from "../src/core/schem.js";
+import { upgradeProject } from "../src/core/project.js";
+import { checks } from "../src/core/facade.js";
 import { sampleProject } from "../src/core/sample.js";
 
 const key = (c) => `${c.base}-${c.body}-${c.capital}-${c.roof}-${c.floors}`;
@@ -19,9 +22,9 @@ test("every combination appears exactly once", () => {
     assert.ok(c.floors >= p.floorMin && c.floors <= p.floorMax);
     assert.ok(c.base < 2 && c.body < 2 && c.capital < 2 && c.roof < 3);
   }
-  assert.deepEqual(comboAt(p, 0), { base: 0, body: 0, capital: 0, roof: 0, floors: 3 });
-  assert.deepEqual(comboAt(p, 6), { base: 0, body: 0, capital: 0, roof: 1, floors: 3 });
-  assert.deepEqual(comboAt(p, 143), { base: 1, body: 1, capital: 1, roof: 2, floors: 8 });
+  assert.deepEqual(comboAt(p, 0), { base: 0, body: 0, capital: 0, roof: 0, floors: 3, depth: 9 });
+  assert.deepEqual(comboAt(p, 6), { base: 0, body: 0, capital: 0, roof: 1, floors: 3, depth: 9 });
+  assert.deepEqual(comboAt(p, 143), { base: 1, body: 1, capital: 1, roof: 2, floors: 8, depth: 9 });
 });
 
 test("an amount below all takes the first N in order", () => {
@@ -63,12 +66,12 @@ test("each building gets its own party-wall seed; the project is not changed", (
 });
 
 test("titles and index.csv use the variant names", () => {
-  const p = forCombo(sampleProject(), { base: 1, body: 0, capital: 1, roof: 2, floors: 4 });
+  const p = forCombo(sampleProject(), { base: 1, body: 0, capital: 1, roof: 2, floors: 4, depth: 9 });
   assert.equal(buildingTitle(p), "Colonnade / Three windows / Parapet / Roof garden, 4 floors");
   p.stages.base[1].name = 'Big, "grand" base';
   const out = indexCsv([{ file: "a.bp", p, blocks: 10 }]).split("\r\n");
-  assert.equal(out[0], "file,base,body,capital,roof,floors,seed,blocks");
-  assert.equal(out[1], `a.bp,"Big, ""grand"" base",Three windows,Parapet,Roof garden,4,${p.assembly.seed},10`);
+  assert.equal(out[0], "file,base,body,capital,roof,floors,depth,seed,blocks");
+  assert.equal(out[1], `a.bp,"Big, ""grand"" base",Three windows,Parapet,Roof garden,4,9,${p.assembly.seed},10`);
 });
 
 test("a different roof keeps the same party walls", () => {
@@ -78,4 +81,47 @@ test("a different roof keeps the same party walls", () => {
   assert.equal(a.assembly.seed, c.assembly.seed);
   const walls = (q) => [...assemble(q).cells].filter(([, v]) => v.kind === "party").map(([k, v]) => k + v.s).join();
   assert.equal(walls(a), walls(c));
+});
+
+test("a depth range adds every depth to the combinations", () => {
+  const p = sampleProject();
+  p.depthMin = 9; p.depthMax = 11;
+  const all = chooseCombos(p);
+  assert.equal(all.length, 144 * 3);
+  assert.deepEqual(new Set(all.map((c) => c.depth)), new Set([9, 10, 11]));
+  const q = forCombo(p, all.find((c) => c.depth === 11));
+  assert.equal(buildingDepth(q), 11);
+  // Party walls only: the slate gable's overhang reaches one block further.
+  const back = Math.min(...[...assemble(q).cells].filter(([, c]) => c.kind === "party").map(([k]) => +k.split(",")[2]));
+  assert.equal(back, -10, "back wall 11 blocks from the front, Core Wall included");
+});
+
+test("depth shows in names and titles only when the range has more than one value", () => {
+  const p = sampleProject();
+  assert.equal(schemName(p), "facade_b1-b1-c1-r1_5fl");
+  p.depthMax = 12; p.assembly.depth = 12;
+  assert.equal(schemName(p), "facade_b1-b1-c1-r1_5fl_12d");
+  assert.match(buildingTitle(p), /, 5 floors, 12 deep$/);
+});
+
+test("the building is never shallower than the facade allows", () => {
+  const p = sampleProject(); // depthBack 1: needs at least 3
+  p.depthMin = 2; p.depthMax = 2; p.assembly.depth = 2;
+  assert.equal(buildingDepth(p), 3);
+  assert.ok(checks(p).some(([t, m]) => t === "err" && m.includes("Depth range")));
+});
+
+test("a version 1 project loads with its depth as a range of one", () => {
+  const v1 = { format: "instrumentum-urbis/facade", formatVersion: 1, width: 7, depthFront: 1, depthBack: 1,
+    heights: { base: 4, body: 4, capital: 3 }, stages: { base: [], body: [], capital: [] },
+    floorMin: 3, floorMax: 5, buildingDepth: 11, partyWall: [], assembly: { base: 0, body: 0, capital: 0, floors: 3, seed: 1 } };
+  const p = upgradeProject(v1);
+  assert.equal(p.formatVersion, 2);
+  assert.equal(p.depthMin, 11);
+  assert.equal(p.depthMax, 11);
+  assert.equal(p.assembly.depth, 11);
+  assert.equal(p.buildingDepth, undefined);
+  assert.deepEqual(p.roofs, []);
+  assert.equal(p.bulk.format, "bp");
+  assert.deepEqual(upgradeProject(structuredClone(p)), p, "upgrading again changes nothing");
 });
