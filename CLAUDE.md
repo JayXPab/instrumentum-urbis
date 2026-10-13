@@ -229,11 +229,11 @@ need a bump.
 5. ✅ Export: WorldEdit `.schem`, Axiom `.bp` and Litematica `.litematic`, all
    checked in game on 1.21.11.
 6. ✅ Combination generator with bulk export (checked in game with Axiom)
-7. 🔶 Corners: sharp and chamfered, merge/trim, plot as deep as the mid-row
-   buildings, L-shaped roofs that join the mid-row roofs: built (awaiting
-   in-game check). Later: repeating facade bays instead of a continued wall.
-8. 🔶 Roofs: gable, sloped, mansard, convex mansard, flat, garden; materials and
-   gradient bands: built (awaiting in-game check). Later: dormers, hipped roofs.
+7. ✅ Corners: sharp and chamfered, merge/trim, plot as deep as the mid-row
+   buildings, L-shaped roofs that join the mid-row roofs (checked in game).
+   Later: repeating facade bays instead of a continued wall.
+8. ✅ Roofs: gable, sloped, mansard, convex mansard, flat, garden; materials and
+   gradient bands (checked in game). Later: dormers, hipped mid-row roofs.
 9. ⬜ Schematic import (user defines the Core Wall; validate and recentre x = 0)
 10. ⬜ Desktop app (Tauri); later the in-game mod
 
