@@ -118,3 +118,53 @@ export function swatchTexture(textures) {
   }
   return null;
 }
+
+/* ---------- tints ---------- */
+// Some textures are grey in the jar and coloured by the game: grass and
+// leaves by biome, a few blocks by a fixed colour. The editor uses the forest
+// biome's colours. Only model faces marked with a "tintindex" are coloured.
+
+/** Grass and leaf colours in the forest biome (the game's colour maps at temperature 0.7, downfall 0.8). */
+export const FOREST = { grass: "#79c05a", foliage: "#59ae30" };
+
+/** Block id (without "minecraft:") -> the colour its marked faces get. */
+const TINTS = {
+  grass_block: FOREST.grass, short_grass: FOREST.grass, tall_grass: FOREST.grass,
+  fern: FOREST.grass, large_fern: FOREST.grass, potted_fern: FOREST.grass,
+  sugar_cane: FOREST.grass, bush: FOREST.grass,
+  oak_leaves: FOREST.foliage, jungle_leaves: FOREST.foliage, acacia_leaves: FOREST.foliage,
+  dark_oak_leaves: FOREST.foliage, mangrove_leaves: FOREST.foliage, vine: FOREST.foliage,
+  // Fixed colours, the same in every biome.
+  birch_leaves: "#80a755", spruce_leaves: "#619961", lily_pad: "#208030",
+};
+
+/** The colour a block's marked faces get, or null when it has none. */
+export const tintOf = (id) => TINTS[bare(id)] || null;
+
+/**
+ * What a block looks like from the front, as texture layers drawn in order:
+ * each element's north face (south, else any face, if it has none), with
+ * the block's tint on faces marked for it. A grass block gives its side and
+ * then the green fringe on top. Repeated layers are left out.
+ * @param {{textures:Record<string,string>, elements:any[]|null}} model a resolved model
+ * @param {string} id the block id, for its tint
+ * @returns {{texture:string, tint:string|null}[]}
+ */
+export function frontLayers(model, id) {
+  const tint = tintOf(id);
+  const layers = [];
+  for (const el of model.elements || []) {
+    const faces = el.faces || {};
+    const face = faces.north || faces.south || Object.values(faces)[0];
+    if (!face) continue;
+    const texture = textureOf(model.textures, face.texture);
+    if (!texture) continue;
+    const t = face.tintindex !== undefined ? tint : null;
+    if (!layers.some((l) => l.texture === texture && l.tint === t)) layers.push({ texture, tint: t });
+  }
+  if (!layers.length) {
+    const texture = swatchTexture(model.textures);
+    if (texture) layers.push({ texture, tint: null });
+  }
+  return layers;
+}

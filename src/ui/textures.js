@@ -4,7 +4,7 @@
  * URLs for them. Without copied game files, everything stays flat colours.
  */
 import { isDesktop, assetsStatus, readAsset } from "./desktop.js";
-import { pickModels, resolveModel, swatchTexture, blockstateFile, textureFile } from "../core/models.js";
+import { pickModels, resolveModel, frontLayers, blockstateFile, textureFile } from "../core/models.js";
 
 let version = null;
 /** What was copied: { jar, files }, or null when there are no game files yet. */
@@ -52,6 +52,43 @@ export function textureUrl(name) {
   return urls.get(name);
 }
 
+/** Loads a picture URL into an image. */
+const loadImage = (url) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+
+/**
+ * Draws texture layers on top of each other, colouring the tinted ones the way
+ * the game does (the grey texture multiplied by the colour, keeping its
+ * see-through parts). Animated textures (tall strips) give their first frame.
+ * Returns a picture URL.
+ */
+async function drawLayers(layers) {
+  const S = 16;
+  const out = document.createElement("canvas");
+  out.width = out.height = S;
+  const ctx = out.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  for (const l of layers) {
+    const url = await textureUrl(l.texture);
+    if (!url) continue;
+    const im = await loadImage(url);
+    const f = im.width; // frames are square: the first one is the top f × f
+    if (!l.tint) { ctx.drawImage(im, 0, 0, f, f, 0, 0, S, S); continue; }
+    const c = document.createElement("canvas");
+    c.width = c.height = S;
+    const x = c.getContext("2d");
+    x.imageSmoothingEnabled = false;
+    x.drawImage(im, 0, 0, f, f, 0, 0, S, S);
+    x.globalCompositeOperation = "multiply";
+    x.fillStyle = l.tint;
+    x.fillRect(0, 0, S, S);
+    x.globalCompositeOperation = "destination-in"; // keep only where the texture was
+    x.drawImage(im, 0, 0, f, f, 0, 0, S, S);
+    ctx.drawImage(c, 0, 0);
+  }
+  const blob = await new Promise((r) => out.toBlob(r, "image/png"));
+  return URL.createObjectURL(blob);
+}
+
 /** A picture URL that stands for a block in the palette, or null when there is none. */
 export function blockSwatch(id) {
   if (!info) return Promise.resolve(null);
@@ -60,8 +97,11 @@ export function blockSwatch(id) {
       try {
         const [m] = pickModels(await loadJson(blockstateFile(id)), {});
         if (!m) return null;
-        const tex = swatchTexture((await resolveModel(m.model, loadJson)).textures);
-        return tex ? await textureUrl(tex) : null;
+        const layers = frontLayers(await resolveModel(m.model, loadJson), id);
+        if (!layers.length) return null;
+        // One plain layer: the texture itself. Otherwise draw the layers together.
+        if (layers.length === 1 && !layers[0].tint) return await textureUrl(layers[0].texture);
+        return await drawLayers(layers);
       } catch (e) {
         return null; // a block this version doesn't have, or a file that's missing
       }

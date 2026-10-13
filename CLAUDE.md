@@ -299,10 +299,17 @@ moves to the top of whichever left panel is open. A marker shows the paste point
 - A block's texture: blockstate → variant (stored properties must match;
   missing ones match anything; the first of a random list) → model → parents
   (child textures win, nearest elements win) → `#refs`. The palette swatch
-  takes `all`, `side`, `texture`, `cross`, `pane`, … in that order.
+  draws the block's front: each element's north face in order (`frontLayers`),
+  so a grass block is its side plus the fringe; without elements it takes
+  `all`, `side`, `texture`, `cross`, `pane`, … in that order.
+- **Tints**: faces marked `tintindex` are coloured like the game does (grey
+  texture × colour, see-through kept). Grass and leaves use the **forest
+  biome** colours (`FOREST`: grass `#79c05a`, foliage `#59ae30`); birch
+  `#80a755`, spruce `#619961` and lily pad `#208030` are fixed. Which blocks
+  are tinted is a table (`TINTS` in models.js): the game decides this in code,
+  not in the jar's files.
 - Without copied files, or in the browser, blocks stay flat colours.
-- Not yet: tinted textures (grass tops, leaves) show grey; the 3D view still
-  uses flat colours (roadmap 10.4).
+- Not yet: the 3D view still uses flat colours (roadmap 10.4).
 
 ## Project file
 
@@ -340,7 +347,7 @@ need a bump.
        Windows with Modrinth).
     3. 🔶 Game files: find the game jar across launchers, copy block
        textures/models/blockstates out once, palette and current-block
-       swatches show real textures. Built and tested in the Linux app with a
+       swatches show real textures; grass and leaves in forest colours. Built and tested in the Linux app with a
        pretend jar (awaiting a Windows check with the real 1.21.11 jar).
     4. ⬜ Draw blocks with textures, then with their real models.
     5. ⬜ Windows installer and app icon.

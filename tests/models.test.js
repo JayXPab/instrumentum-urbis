@@ -2,7 +2,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickModels, resolveModel, textureOf, swatchTexture, modelFile, textureFile, blockstateFile } from "../src/core/models.js";
+import { pickModels, resolveModel, textureOf, swatchTexture, modelFile, textureFile, blockstateFile, tintOf, frontLayers } from "../src/core/models.js";
 
 // Cut-down copies of the real 1.21 files.
 const FILES = {
@@ -98,4 +98,34 @@ test("the swatch texture prefers the side over the end", async () => {
   assert.equal(swatchTexture(m.textures), "minecraft:block/quartz_pillar");
   assert.equal(swatchTexture((await resolveModel("minecraft:block/brick_stairs", load)).textures), "minecraft:block/bricks");
   assert.equal(swatchTexture({}), null);
+});
+
+test("grass and leaves get the forest colours; other blocks none", () => {
+  assert.equal(tintOf("minecraft:grass_block"), "#79c05a");
+  assert.equal(tintOf("minecraft:oak_leaves"), "#59ae30");
+  assert.equal(tintOf("minecraft:birch_leaves"), "#80a755"); // fixed in every biome
+  assert.equal(tintOf("minecraft:bricks"), null);
+  assert.equal(tintOf("minecraft:cherry_leaves"), null); // already coloured in its texture
+});
+
+test("front layers: a grass block is its side plus the tinted fringe; only marked faces are tinted", () => {
+  const grass = {
+    textures: { side: "minecraft:block/grass_block_side", overlay: "minecraft:block/grass_block_side_overlay", top: "minecraft:block/grass_block_top" },
+    elements: [
+      { faces: { up: { texture: "#top", tintindex: 0 }, north: { texture: "#side" } } },
+      { faces: { north: { texture: "#overlay", tintindex: 0 } } },
+    ],
+  };
+  assert.deepEqual(frontLayers(grass, "minecraft:grass_block"), [
+    { texture: "minecraft:block/grass_block_side", tint: null },
+    { texture: "minecraft:block/grass_block_side_overlay", tint: "#79c05a" },
+  ]);
+  // Stairs: two elements with the same front texture give one layer.
+  const stairs = { textures: { side: "minecraft:block/bricks" }, elements: [{ faces: { north: { texture: "#side" } } }, { faces: { north: { texture: "#side" } } }] };
+  assert.deepEqual(frontLayers(stairs, "minecraft:brick_stairs"), [{ texture: "minecraft:block/bricks", tint: null }]);
+  // A marked face on a block without a tint stays as it is.
+  const odd = { textures: { all: "minecraft:block/x" }, elements: [{ faces: { north: { texture: "#all", tintindex: 0 } } }] };
+  assert.deepEqual(frontLayers(odd, "minecraft:stone"), [{ texture: "minecraft:block/x", tint: null }]);
+  // No elements: falls back to the swatch texture.
+  assert.deepEqual(frontLayers({ textures: { all: "minecraft:block/y" }, elements: null }, "minecraft:y"), [{ texture: "minecraft:block/y", tint: null }]);
 });
