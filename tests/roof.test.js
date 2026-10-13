@@ -200,3 +200,69 @@ test("garden density sets how much grows, and the same seed grows the same garde
     assert.ok(all.some((b) => b.s === "minecraft:tall_grass[half=upper]" && b.x === low.x && b.z === low.z && b.y === low.y + 1));
   assert.ok(all.some((b) => b.s === "minecraft:grass_block"));
 });
+
+/* ---------- corner roofs ---------- */
+
+const cornerP = (type, chamfer = 2) => { const p = sampleProject(); p.assembly.type = type; p.types = { chamfer }; return p; };
+/** Highest roof level at each (x, z), ignoring party-wall fill. */
+const tops = (pieces) => {
+  const m = new Map();
+  for (const c of pieces) if (c.part !== "party") m.set(c.x + "," + c.z, Math.max(m.get(c.x + "," + c.z) ?? -1, c.y + (c.part === "slab" ? 0.5 : 1)));
+  return m;
+};
+
+test("on a corner building a gable becomes a hipped roof: eaves on all four sides", () => {
+  const p = cornerP("cr");
+  const t = tops(roofShape(p, style({ height: 4 })));
+  const f = footprint(p);
+  assert.equal(f.zMax - f.zMin + 1, p.width, "square footprint");
+  for (let i = f.xMin; i <= f.xMax; i++) {
+    assert.equal(t.get(i + "," + f.zMax), 0.5, "front eave");
+    assert.equal(t.get(i + "," + f.zMin), 0.5, "back eave");
+  }
+  for (let z = f.zMin; z <= f.zMax; z++) {
+    assert.equal(t.get(f.xMin + "," + z), 0.5, "inner eave");
+    assert.equal(t.get(f.xMax + "," + z), 0.5, "side-street eave");
+  }
+  assert.equal(Math.max(...t.values()), 4);
+  assert.ok(roofShape(p, style({ height: 4 })).some((c) => c.part === "stairs" && /^outer/.test(c.shape)), "hip lines use outer corner stairs");
+});
+
+test("a sloped corner roof comes down toward both streets, high at the inner back corner", () => {
+  const p = cornerP("cr");
+  const f = footprint(p);
+  const pieces = roofShape(p, style({ type: "sloped", height: 4 }));
+  const t = tops(pieces);
+  assert.equal(t.get(f.xMin + "," + f.zMin), 4, "inner back corner is highest");
+  assert.equal(t.get(f.xMax + "," + f.zMax), 0.5, "street corner is lowest");
+  assert.ok(pieces.some((c) => c.part === "party"), "high edges closed with party wall");
+});
+
+test("edge reaches out over both streets on a corner, never over the neighbours", () => {
+  const p = cornerP("cr");
+  const f = footprint(p);
+  const xs = roofShape(p, style({ edge: 1 })).map((c) => c.x), zs = roofShape(p, style({ edge: 1 })).map((c) => c.z);
+  assert.equal(Math.max(...xs), f.xMax + 1);
+  assert.equal(Math.max(...zs), f.zMax + 1);
+  assert.equal(Math.min(...xs), f.xMin);
+  assert.equal(Math.min(...zs), f.zMin);
+});
+
+test("a left corner roof mirrors the right one", () => {
+  const r = roofShape(cornerP("cr"), style({ type: "sloped", height: 4 }));
+  const l = roofShape(cornerP("cl"), style({ type: "sloped", height: 4 }));
+  const tr = tops(r), tl = tops(l);
+  for (const [k, h] of tr) {
+    const [x, z] = k.split(",").map(Number);
+    assert.equal(tl.get(-x + "," + z), h, "mirror of " + k);
+  }
+  assert.ok(l.filter((c) => c.part === "stairs" && c.facing === "east").length > 0, "stairs turned the other way");
+});
+
+test("a chamfered corner clips the roof along the diagonal; a garden wall follows it", () => {
+  const p = cornerP("cr-ch", 2);
+  const t = tops(roofShape(p, style({ height: 4 })));
+  assert.ok(!t.has("3,0") && !t.has("2,0") && !t.has("3,-1"), "roof cut at the corner");
+  const g = roofShape(p, { type: "garden" });
+  assert.ok(g.some((c) => c.part === "parapet" && c.x === 2 && c.z === -1), "wall along the cut");
+});

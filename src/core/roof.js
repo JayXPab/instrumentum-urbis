@@ -18,6 +18,7 @@
 import { bounds, uid } from "./facade.js";
 import { buildingDepth } from "./assemble.js";
 import { MMAP, MATERIALS, makeState } from "./blocks.js";
+import { cornerOf, outsideChamfer, stairFromQuarters, halfOf } from "./corner.js";
 
 export const ROOF_TYPES = /** @type {const} */ (["gable", "sloped", "mansard", "convex", "flat", "garden"]);
 export const ROOF_NAMES = {
@@ -29,7 +30,7 @@ export const SLOPED = new Set(["gable", "sloped", "mansard", "convex"]);
 export const EDGE_MIN = -3, EDGE_MAX = 2;
 
 /**
- * @typedef {{x:number, y:number, z:number, part:string, facing?:string, p:number}} Piece
+ * @typedef {{x:number, y:number, z:number, part:string, facing?:string, shape?:string, p:number}} Piece
  *   y is the level above the top of the building (0 = first roof layer).
  *   part: block | stairs | slab | gable | party | parapet | soil | plant
  *   p: 0 at the eaves .. 1 at the ridge, for the material gradient
@@ -73,6 +74,8 @@ const half = (h) => Math.max(0.5, Math.round(h * 2) / 2);
  * @returns {Piece[]}
  */
 export function roofShape(p, style) {
+  const corner = cornerOf(p);
+  if (corner) return cornerRoofShape(p, style, corner);
   const f = footprint(p);
   if (style.type === "flat" || style.type === "garden") return flatShape(f, style);
   if (!SLOPED.has(style.type)) return [];
@@ -126,22 +129,31 @@ export function roofShape(p, style) {
 }
 
 /** Flat and garden roofs: one layer over the footprint, with a wall round the edge. */
-function flatShape(f, style) {
+function flatShape(f, style, skip = () => false) {
+  const cells = new Set();
+  for (let x = f.xMin; x <= f.xMax; x++)
+    for (let z = f.zMin; z <= f.zMax; z++) if (!skip(x, z)) cells.add(x + "," + z);
+  return flatCells(cells, style);
+}
+
+/** A flat or garden roof over any set of cells ("x,z"); edge cells have a missing neighbour. */
+function flatCells(cells, style) {
   /** @type {Piece[]} */
   const out = [];
   const garden = style.type === "garden";
   const walled = garden || !!style.parapet;
-  for (let x = f.xMin; x <= f.xMax; x++)
-    for (let z = f.zMin; z <= f.zMax; z++) {
-      const edge = x === f.xMin || x === f.xMax || z === f.zMin || z === f.zMax;
-      if (walled && edge) {
-        out.push({ x, y: 0, z, part: garden ? "parapet" : "block", p: 0 });
-        out.push({ x, y: 1, z, part: "parapet", p: 0 });
-      } else {
-        out.push({ x, y: 0, z, part: garden ? "soil" : "block", p: 0 });
-        if (garden) out.push({ x, y: 1, z, part: "plant", p: 0 });
-      }
+  const has = (x, z) => cells.has(x + "," + z);
+  for (const key of cells) {
+    const [x, z] = key.split(",").map(Number);
+    const edge = !has(x + 1, z) || !has(x - 1, z) || !has(x, z + 1) || !has(x, z - 1);
+    if (walled && edge) {
+      out.push({ x, y: 0, z, part: garden ? "parapet" : "block", p: 0 });
+      out.push({ x, y: 1, z, part: "parapet", p: 0 });
+    } else {
+      out.push({ x, y: 0, z, part: garden ? "soil" : "block", p: 0 });
+      if (garden) out.push({ x, y: 1, z, part: "plant", p: 0 });
     }
+  }
   return out;
 }
 
@@ -220,7 +232,12 @@ export function roofBlocks(p, style, y0, rnd, party = () => null) {
     switch (c.part) {
       case "block": s = pickMaterial(st, c.p, rnd).block; break;
       case "slab": s = makeState(pickMaterial(st, c.p, rnd).slab, { type: "bottom" }); break;
-      case "stairs": s = makeState(pickMaterial(st, c.p, rnd).stairs, { facing: c.facing, half: "bottom" }); break;
+      case "stairs": {
+        const props = { facing: c.facing, half: "bottom" };
+        if (c.shape && c.shape !== "straight") props.shape = c.shape;
+        s = makeState(pickMaterial(st, c.p, rnd).stairs, props);
+        break;
+      }
       case "gable": s = gable; break;
       case "party": s = party() || gable; break;
       case "parapet": s = st.parapetBlock; break;
@@ -236,6 +253,91 @@ export function roofBlocks(p, style, y0, rnd, party = () => null) {
       }
     }
     if (s) out.push({ x: c.x, y: y0 + c.y, z: c.z, s });
+  }
+  return out;
+}
+
+/* ---------- corner roofs ---------- */
+// A corner building is square with streets on two sides. Sloped roofs become
+// a height field over the footprint: the lower of two outlines, one across x
+// and one across z.
+//   gable, mansard, convex: slopes on all four sides meeting at hip lines (hipped roof)
+//   sloped: down toward both streets, high at the inner back corner
+// Edge (overhang/inset) applies on the two street sides only.
+// Worked out for a right corner; a left corner mirrors it.
+
+function cornerRoofShape(p, style, corner) {
+  const pieces = rightCornerRoof(p, style, corner.chamfer);
+  if (corner.side === "right") return pieces;
+  const b = bounds(p), m = b.xMin + b.xMax;
+  const flipEW = { east: "west", west: "east" };
+  return pieces.map((c) => ({
+    ...c,
+    x: m - c.x,
+    ...(c.facing ? { facing: flipEW[c.facing] || c.facing } : {}),
+    ...(c.shape ? { shape: c.shape.replace(/left|right/, (s) => (s === "left" ? "right" : "left")) } : {}),
+  }));
+}
+
+const DIRS = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
+const DIAG = { NE: [1, -1], NW: [-1, -1], SE: [1, 1], SW: [-1, 1] };
+
+function rightCornerRoof(p, style, chamfer) {
+  const f = footprint(p);
+  const cut = (x, z) => outsideChamfer(p, chamfer, x, z);
+  if (style.type === "flat" || style.type === "garden") return flatShape(f, style, cut);
+  if (!SLOPED.has(style.type)) return [];
+
+  const e = Math.max(EDGE_MIN, Math.min(EDGE_MAX, Math.round(style.edge || 0)));
+  const x0 = f.xMin, x1 = f.xMax + e, z0 = f.zMin, z1 = f.zMax + e;
+  const nx = x1 - x0 + 1, nz = z1 - z0 + 1;
+  if (nx < 1 || nz < 1) return [];
+  const H = Math.max(1, style.height || 1);
+
+  /** Top of the roof in each column, to the half block. */
+  const q = new Map();
+  for (let x = x0; x <= x1; x++)
+    for (let z = z0; z <= z1; z++) {
+      if (cut(x, z)) continue;
+      q.set(x + "," + z, half(Math.min(outline(style.type, x - x0, nx, H), outline(style.type, z - z0, nz, H))));
+    }
+  const Q = (x, z) => q.get(x + "," + z) ?? 0;
+  // Beyond the inner side and back walls are the neighbours: count them as level with
+  // the roof, so a high edge there is closed with party wall rather than roof blocks.
+  const beyond = (x, z) => x < f.xMin || z < f.zMin;
+  const around = (x, z, h) => Object.entries(DIRS).map(([d, [dx, dz]]) => [d, beyond(x + dx, z + dz) ? h : Q(x + dx, z + dz)]);
+  const top = Math.max(...[...q.values()].map((t) => Math.ceil(t) - 1)) || 1;
+
+  /** @type {Piece[]} */
+  const out = [];
+  const piece = (x, y, z, part, extra = {}) => out.push({ x, y, z, part, p: Math.min(1, y / top), ...extra });
+  for (const [key, h] of q) {
+    const [x, z] = key.split(",").map(Number);
+    const k = Math.ceil(h) - 1;
+    const near = around(x, z, h);
+    const from = Math.min(k, Math.floor(Math.min(...near.map(([, t]) => t))));
+    for (let y = from; y < k; y++) piece(x, y, z, "block");
+    if (h - k === 0.5) { piece(x, k, z, "slab"); continue; }
+    const higher = near.filter(([, t]) => t > h).map(([d]) => d);
+    const lower = near.some(([, t]) => t < h);
+    let st = null;
+    if (lower && higher.length) st = stairFromQuarters(new Set(higher.flatMap(halfOf)));
+    else if (lower) {
+      // On a hip line: no side is higher, but a diagonal is. That's an outer corner.
+      const up = Object.entries(DIAG).filter(([, [dx, dz]]) => Q(x + dx, z + dz) > h).map(([qd]) => qd);
+      if (up.length === 1) st = stairFromQuarters(new Set(up));
+    }
+    if (st) piece(x, k, z, "stairs", { facing: st.facing, ...(st.shape !== "straight" ? { shape: st.shape } : {}) });
+    else piece(x, k, z, "block");
+  }
+
+  // The inner side wall and the back wall are party walls: close the space under a high roof edge.
+  for (const [key, h] of q) {
+    const [x, z] = key.split(",").map(Number);
+    if (!(x === f.xMin || z === f.zMin) || x > f.xMax || z > f.zMax) continue;
+    const near = around(x, z, h).map(([, t]) => t);
+    const from = Math.min(Math.ceil(h) - 1, Math.floor(Math.min(...near)));
+    for (let y = 0; y < from; y++) piece(x, y, z, "party");
   }
   return out;
 }
