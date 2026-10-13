@@ -117,7 +117,7 @@ changes, bump `formatVersion` and keep loading older files.
 2. ✅ 3D viewer
 3. ✅ Stage editor (3D clicking + elevation grid, mirror, undo)
 4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
-5. 🔶 Export: WorldEdit `.schem` built (awaiting in-game check). Next: Litematica
+5. 🔶 Export: WorldEdit `.schem` ✅ (checked in game on 1.21.11). Next: Litematica
    `.litematic` and Axiom `.bp`.
 6. ⬜ Combination generator with bulk export ("all combinations" warns above a limit)
 7. ⬜ Corners: sharp, then chamfered, with the merge/trim rule
