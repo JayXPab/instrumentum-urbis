@@ -157,6 +157,16 @@
         </div>
         <p class="lbl" id="schemInfo" style="margin:0"></p>
       </div>
+      <!-- Desktop app only: shown when running in the Tauri window -->
+      <div class="sec" id="folderSec" hidden>
+        <h2>Save to folders</h2>
+        <p class="lbl" style="margin:0">Files are saved straight into the game, ready to use. Use <b>Find game folders</b> to pick your profile, or choose a folder for each format. A format without a folder downloads instead.</p>
+        <div id="folderRows"></div>
+        <div class="acts">
+          <button class="btn" id="findFolders" title="Lists the normal .minecraft folder and your Modrinth, CurseForge, Prism, ATLauncher, GDLauncher and FTB profiles, with the Axiom, WorldEdit and Litematica folders each one has.">Find game folders</button>
+        </div>
+        <div id="foundList"></div>
+      </div>
     </aside>
 
     <section class="view" id="view">
@@ -363,7 +373,7 @@
     <aside class="panel" id="rightExport" hidden>
       <div class="sec">
         <h2>Bulk export</h2>
-        <p class="lbl" style="margin:0">Builds many combinations at once and downloads them in one .zip, with an index.csv listing each building.</p>
+        <p class="lbl" style="margin:0">Builds many combinations at once, with an index.csv listing each building.</p>
         <fieldset class="fld" style="border:0;padding:0;margin:0;gap:6px">
           <legend class="lbl" style="padding:0;margin-bottom:4px">Formats (more than one: a folder each)</legend>
           <label class="chk"><input type="checkbox" id="bulkFmtBp"> Axiom .bp</label>
@@ -378,6 +388,12 @@
           <input type="checkbox" id="bulkRand"> Random sample
         </label>
         <div class="fld"><label for="bulkLimit">Ask before generating more than</label><input type="number" id="bulkLimit" min="1"></div>
+        <fieldset class="fld" id="bulkToSec" style="border:0;padding:0;margin:0;gap:6px" hidden>
+          <legend class="lbl" style="padding:0;margin-bottom:4px">Save as</legend>
+          <label class="chk"><input type="radio" name="bulkTo" id="bulkToZip" value="zip"> One .zip in Downloads</label>
+          <label class="chk"><input type="radio" name="bulkTo" id="bulkToFolders" value="folders"> Files in each format's folder</label>
+          <div class="fld" id="bulkSubFld"><label for="bulkSub">Subfolder (empty: straight into the folder)</label><input type="text" id="bulkSub" spellcheck="false"></div>
+        </fieldset>
         <div class="acts">
           <button class="btn primary" id="bulkGo">Generate .zip</button>
           <button class="btn" id="bulkStop" hidden>Cancel</button>

@@ -1,0 +1,5 @@
+# Compile at most 2 pieces at once. Each one can use over 1 GB of memory, and
+# building one per processor core ran a laptop out of memory on the first build.
+# Only the first build is slow; later builds recompile just this app.
+[build]
+jobs = 2
