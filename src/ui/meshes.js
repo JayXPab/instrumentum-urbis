@@ -57,6 +57,11 @@ export function blockObject(state, x, y, z, opacity = 1) {
     case "pane":
       part(1, 1, 0.14, 0, 0.5, 0);
       break;
+    case "plant":
+      // Two thin crossing leaves, like Minecraft draws grass and flowers.
+      part(0.7, 0.75, 0.08, 0, 0.375, 0);
+      part(0.08, 0.75, 0.7, 0, 0.375, 0);
+      break;
     case "stairs":
       if (props.half === "top") {
         part(1, 0.5, 1, 0, 0.75, 0);

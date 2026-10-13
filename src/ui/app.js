@@ -40,6 +40,8 @@ function save() {
 let P = loadStored();
 if (!validProject(P)) P = sampleProject();
 P.bulk = { ...bulkDefaults(), ...P.bulk };
+P.roofs ??= [];
+P.assembly.roof ??= 0;
 
 /** Editor-only state: never saved. */
 const ui = {
@@ -208,7 +210,7 @@ function render3D() {
     helpers.add(lbl);
   } else {
     const A = assemble(P);
-    $("viewtag").innerHTML = `${A.floors} floors <small>${P.width} × ${A.height} × ${buildingDepth(P)}</small>`;
+    $("viewtag").innerHTML = `${A.floors} floors <small>${P.width} × ${A.top} × ${buildingDepth(P)}</small>`;
     for (const [k, c] of A.cells) {
       const [x, y, z] = unK(k);
       const faded = ui.fade && c.kind === "body" && c.copy > 0;
@@ -218,6 +220,7 @@ function render3D() {
       for (const s of A.segs) {
         addLines(helpers, [[b.xMin - 1.6, s.y0, b.zMax + 0.6], [b.xMax + 0.5, s.y0, b.zMax + 0.6]], muted, 0.55);
         const t = s.kind === "body" ? `BODY ${s.copy + 1}/${s.total}` : s.kind.toUpperCase();
+        if (s.kind === "roof" && s.h <= 0) continue;
         const sp = textSprite(t, s.kind === "body" && s.copy > 0 ? muted : fg);
         sp.position.set(b.xMin - 1.8, s.y0 + s.h / 2, b.zMax + 0.6);
         helpers.add(sp);
@@ -236,7 +239,7 @@ function fitView() {
   const b = bounds(P);
   let h, zMin = b.zMin;
   if (ui.mode === "edit") h = P.heights[ui.stage];
-  else { h = assemble(P).height; zMin = -buildingDepth(P); }
+  else { h = assemble(P).top; zMin = -buildingDepth(P); }
   const cx = (b.xMin + b.xMax) / 2, cy = h / 2, cz = (zMin + b.zMax) / 2;
   const size = Math.max(P.width, h, b.zMax - zMin) + 4;
   controls.target.set(cx, cy, cz);
@@ -580,6 +583,8 @@ function renderBuildPanel() {
   fillSel("pickBase", P.stages.base, "base");
   fillSel("pickBody", P.stages.body, "body");
   fillSel("pickCap", P.stages.capital, "capital");
+  if (P.roofs.length) fillSel("pickRoof", P.roofs, "roof");
+  else { $("pickRoof").innerHTML = "<option>Flat top (no roof styles yet)</option>"; $("pickRoof").disabled = true; }
   $("fMin").value = P.floorMin;
   $("fMax").value = P.floorMax;
   $("bDepth").value = P.buildingDepth;
@@ -591,7 +596,8 @@ function renderBuildPanel() {
   $("floorsVal").textContent = `${a.floors} (base + ${a.floors - 2} body + capital)`;
   const { n, r } = comboCount(P);
   $("comboN").textContent = n.toLocaleString();
-  $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital × ${r} floor count${r === 1 ? "" : "s"}`;
+  const roofs = P.roofs.length ? ` × ${P.roofs.length} roof${P.roofs.length === 1 ? "" : "s"}` : "";
+  $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}`;
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
     $("schemInfo").textContent = `${schemName(P)}: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. Paste point: bottom of the Core Wall’s centre column.`;
@@ -713,6 +719,7 @@ $("pSearch").addEventListener("input", (e) => { ui.filter = e.target.value; rend
 $("pickBase").onchange = (e) => { P.assembly.base = +e.target.value; save(); render3D(); };
 $("pickBody").onchange = (e) => { P.assembly.body = +e.target.value; save(); render3D(); };
 $("pickCap").onchange = (e) => { P.assembly.capital = +e.target.value; save(); render3D(); };
+$("pickRoof").onchange = (e) => { P.assembly.roof = +e.target.value; save(); renderBuildPanel(); render3D(); fitView(); };
 $("floors").addEventListener("input", (e) => { P.assembly.floors = +e.target.value; save(); renderBuildPanel(); render3D(); });
 $("floors").addEventListener("change", () => fitView());
 $("fMin").onchange = (e) => { snapshot(); P.floorMin = clamp(parseInt(e.target.value, 10) || 3, 3, 200); if (P.floorMax < P.floorMin) P.floorMax = P.floorMin; afterStructural(); };
@@ -727,6 +734,7 @@ $("randomize").onclick = () => {
   a.base = Math.floor(r() * P.stages.base.length);
   a.body = Math.floor(r() * P.stages.body.length);
   a.capital = Math.floor(r() * P.stages.capital.length);
+  a.roof = Math.floor(r() * Math.max(1, P.roofs.length));
   a.floors = P.floorMin + Math.floor(r() * (P.floorMax - P.floorMin + 1));
   a.seed = Math.floor(r() * 1e9);
   save(); renderBuildPanel(); render3D(); fitView();
@@ -904,6 +912,8 @@ function loadText(t) {
   P.assembly ??= { base: 0, body: 0, capital: 0, floors: P.floorMin || 3, seed: 1 };
   P.partyWall ??= [];
   P.bulk = { ...bulkDefaults(), ...P.bulk };
+  P.roofs ??= [];
+  P.assembly.roof ??= 0;
   afterStructural();
   fitView();
   toast("Project loaded");

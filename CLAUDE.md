@@ -48,6 +48,7 @@ src/core/             the facade rules: NO DOM, NO three.js
   blueprint.js        assembled building -> Axiom .bp (16³ sections, file layout)
   bulk.js             combination generator: all / first N / random sample, seeds
   zip.js              minimal stored (uncompressed) zip writer
+  roof.js             roof styles: shapes, materials/gradient, garden planting
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels

@@ -3,6 +3,7 @@
 import { makeState } from "./blocks.js";
 import { K, newVariant } from "./facade.js";
 import { bulkDefaults } from "./bulk.js";
+import { roofDefaults } from "./roof.js";
 
 export function sampleProject() {
   const p = {
@@ -23,7 +24,18 @@ export function sampleProject() {
       { block: "minecraft:mud_bricks", weight: 1 },
       { block: "minecraft:terracotta", weight: 1 },
     ],
-    assembly: { base: 0, body: 0, capital: 0, floors: 5, seed: 7 },
+    assembly: { base: 0, body: 0, capital: 0, roof: 0, floors: 5, seed: 7 },
+    roofs: [
+      roofDefaults({ name: "Slate gable", type: "gable", height: 4, edge: 1 }),
+      roofDefaults({
+        name: "Copper mansard", type: "mansard", height: 6,
+        bands: [
+          { mix: [{ material: "oxidized_copper", weight: 3 }, { material: "copper", weight: 1 }] },
+          { mix: [{ material: "deepslate_tiles", weight: 1 }] },
+        ],
+      }),
+      roofDefaults({ name: "Roof garden", type: "garden", parapetBlock: "minecraft:stone_bricks", density: 0.45 }),
+    ],
     bulk: bulkDefaults(),
   };
   const S = (v, x, y, z, s) => {

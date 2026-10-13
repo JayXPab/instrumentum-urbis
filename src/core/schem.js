@@ -99,9 +99,10 @@ export function toSchem(p) {
   return { bytes: writeNbt(root), size: [W, H, L], offset: [x0, y0, z0], blocks: states.size };
 }
 
-/** File name (without extension) for the building in p.assembly, e.g. "facade_b1-b2-c1_5fl". */
+/** File name (without extension) for the building in p.assembly, e.g. "facade_b1-b2-c1-r2_5fl" (no -r part without roof styles). */
 export function schemName(p) {
   const a = p.assembly;
   const floors = Math.max(p.floorMin, Math.min(p.floorMax, a.floors));
-  return `facade_b${a.base + 1}-b${a.body + 1}-c${a.capital + 1}_${floors}fl`;
+  const roof = p.roofs?.length ? `-r${Math.min(a.roof ?? 0, p.roofs.length - 1) + 1}` : "";
+  return `facade_b${a.base + 1}-b${a.body + 1}-c${a.capital + 1}${roof}_${floors}fl`;
 }

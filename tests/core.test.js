@@ -57,13 +57,15 @@ test("checks enforce the depth rule |zmax| <= |xmax|", () => {
   assert.ok(checks(p).some(([t, m]) => t === "err" && m.includes("depth")));
 });
 
-test("assembly stacks base, repeated body floors, then capital", () => {
+test("assembly stacks base, repeated body floors, capital, then roof", () => {
   const p = sampleProject();
   p.assembly.floors = 5;
   const A = assemble(p);
   assert.equal(A.floors, 5);
-  assert.deepEqual(A.segs.map((s) => s.kind), ["base", "body", "body", "body", "capital"]);
+  assert.deepEqual(A.segs.map((s) => s.kind), ["base", "body", "body", "body", "capital", "roof"]);
   assert.equal(A.height, 5 + 4 * 3 + 3);
+  assert.ok(A.top > A.height, "the roof sits on top");
+  assert.ok([...A.cells.values()].some((c) => c.kind === "roof"));
   // Every body floor is the same variant
   assert.ok(A.segs.filter((s) => s.kind === "body").every((s) => s.name === "Three windows"));
 });
@@ -91,7 +93,9 @@ test("the same seed rebuilds the same party walls", () => {
   assert.ok(r() >= 0 && r() < 1);
 });
 
-test("combination count multiplies variants by floor counts", () => {
-  const p = sampleProject(); // 2 × 2 × 2 variants, floors 3..8
-  assert.deepEqual(comboCount(p), { n: 48, r: 6 });
+test("combination count multiplies variants, roofs and floor counts", () => {
+  const p = sampleProject(); // 2 × 2 × 2 variants, 3 roofs, floors 3..8
+  assert.deepEqual(comboCount(p), { n: 144, r: 6, roofs: 3 });
+  p.roofs = []; // no roof styles: flat tops, roofs count as one
+  assert.deepEqual(comboCount(p), { n: 48, r: 6, roofs: 1 });
 });

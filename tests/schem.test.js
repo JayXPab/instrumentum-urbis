@@ -39,7 +39,7 @@ test("every block lands where the assembled building has it", () => {
   const built = assemble(p).cells;
   const { cells, W, H, L, count } = decode(toSchem(p).bytes);
   assert.equal(count, W * H * L);
-  assert.equal(H, assemble(p).height);
+  assert.equal(H, assemble(p).top); // roof included
   assert.equal(cells.size, built.size);
   for (const [k, c] of built) {
     // Panes gain connection properties; everything else is copied as is.
@@ -71,6 +71,10 @@ test("glass panes connect to panes and full blocks, not to air", () => {
 test("file names count variants from 1", () => {
   const p = sampleProject();
   p.assembly.base = 0; p.assembly.body = 1; p.assembly.capital = 0; p.assembly.floors = 4;
+  assert.equal(schemName(p), "facade_b1-b2-c1-r1_4fl");
+  p.assembly.roof = 2;
+  assert.equal(schemName(p), "facade_b1-b2-c1-r3_4fl");
+  p.roofs = []; // no roof styles: no -r part
   assert.equal(schemName(p), "facade_b1-b2-c1_4fl");
 });
 

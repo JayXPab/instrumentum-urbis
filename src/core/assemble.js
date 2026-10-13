@@ -1,8 +1,9 @@
 // Assembly: stacks Base + Body × (floors − 2) + Capital into one building,
-// then fills party walls. Pure functions, no DOM, no three.js.
+// fills party walls, then puts the chosen roof on top. Pure functions, no DOM, no three.js.
 
 import { BMAP } from "./blocks.js";
 import { K, unK, bounds, clamp } from "./facade.js";
+import { roofBlocks } from "./roof.js";
 
 /** Small seeded random generator so a building can be regenerated exactly. */
 export function mulberry32(a) {
@@ -19,13 +20,14 @@ export function mulberry32(a) {
 export const buildingDepth = (p) => Math.max(p.buildingDepth, -bounds(p).zMin + 2);
 
 /**
- * @typedef {{s:string, kind:"base"|"body"|"capital"|"party", copy?:number}} Cell
+ * @typedef {{s:string, kind:"base"|"body"|"capital"|"party"|"roof", copy?:number}} Cell
  * @typedef {{kind:string, copy:number, total:number, y0:number, h:number, name:string}} Segment
  */
 
 /**
  * Builds the building chosen in p.assembly.
- * @returns {{cells: Map<string, Cell>, segs: Segment[], height:number, floors:number}}
+ * height is the top of the capital; top is the top of everything, roof included.
+ * @returns {{cells: Map<string, Cell>, segs: Segment[], height:number, top:number, floors:number}}
  */
 export function assemble(p) {
   const a = p.assembly;
@@ -58,16 +60,18 @@ export function assemble(p) {
   // filling only cells the facade left empty.
   const pal = (p.partyWall || []).filter((e) => BMAP[e.block] && e.weight > 0);
   const tot = pal.reduce((s, e) => s + e.weight, 0);
+  const rnd = mulberry32(a.seed);
+  const pickFrom = (r) => () => {
+    if (tot <= 0) return null;
+    let x = r() * tot;
+    for (const e of pal) {
+      x -= e.weight;
+      if (x < 0) return e.block;
+    }
+    return pal[pal.length - 1].block;
+  };
   if (tot > 0) {
-    const rnd = mulberry32(a.seed);
-    const pick = () => {
-      let r = rnd() * tot;
-      for (const e of pal) {
-        r -= e.weight;
-        if (r < 0) return e.block;
-      }
-      return pal[pal.length - 1].block;
-    };
+    const pick = pickFrom(rnd);
     const zBack = -(buildingDepth(p) - 1);
     for (let y = 0; y < y0; y++) {
       for (let z = -1; z >= zBack; z--)
@@ -81,7 +85,26 @@ export function assemble(p) {
       }
     }
   }
-  return { cells, segs, height: y0, floors };
+
+  // Roof: its own random numbers, so choosing a roof never changes the party walls.
+  let top = y0;
+  const roof = roofOf(p);
+  if (roof) {
+    const rr = mulberry32((a.seed ^ 0x9e3779b9) >>> 0);
+    for (const c of roofBlocks(p, roof, y0, rr, pickFrom(rr))) {
+      const k = K(c.x, c.y, c.z);
+      if (!cells.has(k)) cells.set(k, { s: c.s, kind: "roof" });
+      top = Math.max(top, c.y + 1);
+    }
+    segs.push({ kind: "roof", copy: 0, total: 1, y0, h: top - y0, name: roof.name });
+  }
+  return { cells, segs, height: y0, top, floors };
+}
+
+/** The roof style chosen in p.assembly, or null when the project has none (flat top). */
+export function roofOf(p) {
+  const list = p.roofs || [];
+  return list.length ? list[clamp(p.assembly.roof ?? 0, 0, list.length - 1)] : null;
 }
 
 /** Readable name of the building in p.assembly, e.g. "Shopfront / Three windows / Cornice, 5 floors". */
@@ -89,11 +112,13 @@ export function buildingTitle(p) {
   const a = p.assembly;
   const floors = clamp(a.floors, p.floorMin, p.floorMax);
   const n = (kind, i) => p.stages[kind][i]?.name ?? "?";
-  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}, ${floors} floors`;
+  const roof = roofOf(p);
+  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors`;
 }
 
 /** Number of distinct buildings the current variants and floor range can make. */
 export function comboCount(p) {
   const r = Math.max(0, p.floorMax - p.floorMin + 1);
-  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * r, r };
+  const roofs = Math.max(1, (p.roofs || []).length);
+  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r, r, roofs };
 }
