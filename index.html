@@ -99,6 +99,10 @@
         <div class="fld"><label for="pickBody">Body</label><select id="pickBody"></select></div>
         <div class="fld"><label for="pickCap">Capital</label><select id="pickCap"></select></div>
         <div class="fld"><label for="pickRoof">Roof</label><select id="pickRoof"></select></div>
+        <div class="row2" id="pickColours">
+          <div class="fld" id="pickColourFld"><label for="pickColour">Colour</label><select id="pickColour"></select></div>
+          <div class="fld" id="pickBaseColourFld"><label for="pickBaseColour">Base colour</label><select id="pickBaseColour"></select></div>
+        </div>
         <div class="fld">
           <label for="floors">Floors <span class="rangeval" id="floorsVal"></span></label>
           <input type="range" id="floors" min="3" max="10" step="1">
@@ -194,6 +198,27 @@
 
     <!-- Final Assembly, right-hand side -->
     <aside class="panel" id="rightBuild" hidden>
+      <div class="sec" id="colourSec">
+        <h2>Colours</h2>
+        <p class="lbl" id="colourNone" style="margin:0">To make colour variants, use white wool, terracotta, concrete, concrete powder or carpet in a facade. Each building can then turn them all into one colour.</p>
+        <div id="colourEdit" style="display:flex;flex-direction:column;gap:10px">
+          <label class="chk"><input type="checkbox" id="colOn"> Make colour variants</label>
+          <div class="fld" id="colMainBox">
+            <label>Colours <span class="rangeval" id="colMainCount"></span></label>
+            <div class="swatches" id="colMain" role="group" aria-label="Colours"></div>
+            <div class="acts"><button class="btn small" id="colMainAll">All</button><button class="btn small" id="colMainNone">Only white</button></div>
+          </div>
+          <label class="chk" id="colBaseOnLbl" title="Give the base stage its own colour, for example an awning in a different colour from the walls above.">
+            <input type="checkbox" id="colBaseOn"> Separate base colour
+          </label>
+          <div class="fld" id="colBaseBox">
+            <label>Base colours <span class="rangeval" id="colBaseCount"></span></label>
+            <div class="swatches" id="colBase" role="group" aria-label="Base colours"></div>
+            <div class="acts"><button class="btn small" id="colBaseAll">All</button><button class="btn small" id="colBaseNone">Only white</button></div>
+          </div>
+          <p class="lbl" style="margin:0">In game, concrete powder falls if nothing holds it up, and carpet needs a block beneath it.</p>
+        </div>
+      </div>
       <div class="sec" id="roofSec">
         <h2>Roofs</h2>
         <p class="lbl" style="margin:0">Roof styles are part of the combinations. You edit the one chosen under This building.</p>

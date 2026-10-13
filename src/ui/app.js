@@ -3,7 +3,8 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BLOCKS, BMAP, MATERIALS, parseState, makeState, shortId, mirrorState } from "../core/blocks.js";
+import { BLOCKS, BMAP, MATERIALS, COLOURS, colourName, parseState, makeState, shortId, mirrorState } from "../core/blocks.js";
+import { slotsIn, colourLists } from "../core/colour.js";
 import {
   STAGES, STAGE_NAMES, K, unK, uid, clamp, bounds, mirrorX, axisX,
   newVariant, pruneAll, checks, validProject,
@@ -654,7 +655,9 @@ function renderBuildPanel() {
   const roofs = P.roofs.length ? ` × ${P.roofs.length} roof${P.roofs.length === 1 ? "" : "s"}` : "";
   const nd = Math.max(0, P.depthMax - P.depthMin + 1);
   const depths = (nd > 1 ? ` × ${nd} depths` : "") + (types.length > 1 ? ` × ${types.length} building types` : "");
-  $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}${depths}`;
+  const cc = colourLists(P);
+  const colourText = (cc.main[0] ? ` × ${cc.main.length} colour${cc.main.length === 1 ? "" : "s"}` : "") + (cc.base[0] ? ` × ${cc.base.length} base colour${cc.base.length === 1 ? "" : "s"}` : "");
+  $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}${depths}${colourText}`;
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
     $("schemInfo").textContent = `${schemName(P)}: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. The paste point is marked in the 3D view.`;
@@ -664,6 +667,7 @@ function renderBuildPanel() {
     $("dlSchem").disabled = $("dlBp").disabled = true;
   }
   renderTypes();
+  renderColours();
   renderRoofs();
   renderBulk();
   const rows = $("pwRows");
@@ -798,6 +802,9 @@ $("randomize").onclick = () => {
   a.body = Math.floor(r() * P.stages.body.length);
   a.capital = Math.floor(r() * P.stages.capital.length);
   a.roof = Math.floor(r() * Math.max(1, P.roofs.length));
+  const cl = colourLists(P);
+  if (cl.main[0]) a.colour = cl.main[Math.floor(r() * cl.main.length)];
+  if (cl.base[0]) a.baseColour = cl.base[Math.floor(r() * cl.base.length)];
   a.floors = P.floorMin + Math.floor(r() * (P.floorMax - P.floorMin + 1));
   a.depth = P.depthMin + Math.floor(r() * (P.depthMax - P.depthMin + 1));
   const types = typeList(P);
@@ -879,6 +886,69 @@ $("dlBp").onclick = async () => {
   download(schemName(P) + ".bp", new Blob([bytes]));
   toast("Downloaded " + schemName(P) + ".bp");
 };
+/* ---------- colours ---------- */
+const woolColour = (c) => BMAP["minecraft:" + c + "_wool"].color;
+
+function renderColours() {
+  const C = P.colours, slots = slotsIn(P), cl = colourLists(P);
+  const any = slots.base || slots.rest;
+  $("colourNone").hidden = any;
+  $("colourEdit").hidden = !any;
+  $("colOn").checked = C.on;
+  $("colMainBox").hidden = !C.on;
+  $("colBaseOnLbl").hidden = !C.on || !slots.base;
+  $("colBaseOn").checked = C.baseOn;
+  $("colBaseBox").hidden = !C.on || !C.baseOn || !slots.base;
+  swatches("colMain", "list");
+  swatches("colBase", "baseList");
+  const count = (l) => `${l.length} of 16`;
+  $("colMainCount").textContent = count(C.list);
+  $("colBaseCount").textContent = count(C.baseList);
+  // This building: pick from the colours in use.
+  const opts = (list, sel) => list.map((c) => `<option value="${c}"${c === sel ? " selected" : ""}>${colourName(c)}</option>`).join("");
+  $("pickColourFld").hidden = !cl.main[0];
+  $("pickBaseColourFld").hidden = !cl.base[0];
+  $("pickColours").hidden = !cl.main[0] && !cl.base[0];
+  if (cl.main[0]) {
+    if (!cl.main.includes(P.assembly.colour)) P.assembly.colour = cl.main[0];
+    $("pickColour").innerHTML = opts(cl.main, P.assembly.colour);
+  }
+  if (cl.base[0]) {
+    if (!cl.base.includes(P.assembly.baseColour)) P.assembly.baseColour = cl.base[0];
+    $("pickBaseColour").innerHTML = opts(cl.base, P.assembly.baseColour);
+  }
+}
+
+/** A row of 16 colour swatches that tick colours in and out of P.colours[key]. */
+function swatches(id, key) {
+  const box = $(id);
+  box.innerHTML = "";
+  for (const c of COLOURS) {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.style.background = woolColour(c);
+    b.title = colourName(c);
+    b.setAttribute("aria-label", colourName(c));
+    b.setAttribute("aria-pressed", String(P.colours[key].includes(c)));
+    b.onclick = () => {
+      snapshot();
+      const l = P.colours[key];
+      P.colours[key] = l.includes(c) ? l.filter((x) => x !== c) : COLOURS.filter((x) => x === c || l.includes(x));
+      afterColours();
+    };
+    box.appendChild(b);
+  }
+}
+function afterColours() { save(); renderBuildPanel(); render3D(); }
+$("colOn").onchange = (e) => { snapshot(); P.colours.on = e.target.checked; afterColours(); };
+$("colBaseOn").onchange = (e) => { snapshot(); P.colours.baseOn = e.target.checked; afterColours(); };
+$("colMainAll").onclick = () => { snapshot(); P.colours.list = [...COLOURS]; afterColours(); };
+$("colMainNone").onclick = () => { snapshot(); P.colours.list = ["white"]; afterColours(); };
+$("colBaseAll").onclick = () => { snapshot(); P.colours.baseList = [...COLOURS]; afterColours(); };
+$("colBaseNone").onclick = () => { snapshot(); P.colours.baseList = ["white"]; afterColours(); };
+$("pickColour").onchange = (e) => { P.assembly.colour = e.target.value; save(); renderBuildPanel(); render3D(); };
+$("pickBaseColour").onchange = (e) => { P.assembly.baseColour = e.target.value; save(); renderBuildPanel(); render3D(); };
+
 /* ---------- building types ---------- */
 function renderTypes() {
   const t = P.types;

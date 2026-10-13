@@ -51,6 +51,7 @@ src/core/             the facade rules: NO DOM, NO three.js
   zip.js              minimal stored (uncompressed) zip writer
   roof.js             roof styles: shapes, materials/gradient, garden planting
   corner.js           corner buildings: turned side facade, merge/trim, chamfer
+  colour.js           colour variants: white slot blocks, main and base colours
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
@@ -96,7 +97,15 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   the body. Within one building, every body floor is the **same variant**;
   variety comes between buildings, not between floors.
 - **Combinations** = bases × bodies × capitals × roofs × floor counts × depths ×
-  building types (mid-row, corner, chamfered corner). Ranges are inclusive.
+  building types (mid-row, corner, chamfered corner) × colours × base colours.
+  Ranges are inclusive.
+- **Colour variants**: white wool, terracotta, concrete, concrete powder and
+  carpet anywhere in a facade are colour slots. With colour variants on, each
+  building turns every slot into one colour (`assembly.colour`). Optionally the
+  base stage has its own colour (`assembly.baseColour`), e.g. for awnings.
+  Colours only multiply the combinations where there are white slots for them
+  to colour. Roofs and party walls are never recoloured. File names end
+  `_red` and `_base-white`. Off by default.
 - **Depth range**: how far back the building goes, Core Wall to back wall. Never
   less than the facade's back depth + 2. The `_Nd` file-name part and ", N deep"
   in titles appear only when the range has more than one value.
