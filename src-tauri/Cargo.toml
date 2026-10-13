@@ -22,3 +22,8 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.12.3", features = [] }
 tauri-plugin-log = "2"
+
+# Leave debugging details out of the libraries this app uses: they make the
+# compiler need much more memory and disk, and we never debug those libraries.
+[profile.dev.package."*"]
+debug = false

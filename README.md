@@ -49,8 +49,13 @@ npm install
 npm run desktop
 ```
 
-The first run compiles for a few minutes; after that it opens quickly. Changes
+The first run compiles for several minutes (it builds two pieces at a time so
+it doesn't run out of memory); after that it opens quickly. Changes
 to the editor's code show up in the window straight away.
+
+If a build stops with "memory allocation failed" or "invalid metadata files",
+delete the folder `src-tauri\target` (a crashed build leaves broken files
+there), close other programs, and run `npm run desktop` again.
 
 To build an installer: `npm run desktop:build`. The installers land in
 `src-tauri\target\release\bundle\` (`msi\` and `nsis\`).
