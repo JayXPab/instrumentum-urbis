@@ -4,7 +4,7 @@
 // Colours are flat approximations used only for the editor preview;
 // they are not Minecraft textures.
 
-/** @typedef {{group:string, id:string, name:string, color:string, shape:"cube"|"stairs"|"slab"|"pane"|"plant", opacity:number}} BlockDef */
+/** @typedef {{group:string, id:string, name:string, color:string, shape:"cube"|"stairs"|"slab"|"pane"|"plant"|"carpet", opacity:number}} BlockDef */
 
 /** @type {BlockDef[]} */
 export const BLOCKS = [
@@ -73,6 +73,133 @@ export const BLOCKS = [
   ["Garden", "minecraft:flowering_azalea", "Flowering Azalea", "#7d8d4a", "plant"],
 ].map(([group, id, name, color, shape, opacity]) => ({ group, id, name, color, shape, opacity: opacity ?? 1 }));
 
+/* ---------- colours ---------- */
+// Wool, terracotta, concrete, concrete powder and carpet come in Minecraft's
+// 16 colours. In a facade, the WHITE ones are colour slots: each building
+// can turn them all into one colour (see recolour).
+
+/** The 16 colours, in Minecraft's order. */
+export const COLOURS = [
+  "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
+  "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black",
+];
+export const colourName = (c) => c.replace("_", " ").replace(/^./, (m) => m.toUpperCase());
+
+/** Preview colours (flat approximations, not textures): wool, then terracotta. */
+const WOOL = {
+  white: "#e9ecec", orange: "#f07613", magenta: "#bd44b3", light_blue: "#3aafd9", yellow: "#f8c527", lime: "#70b919",
+  pink: "#ed8dac", gray: "#3e4447", light_gray: "#8e8e86", cyan: "#158991", purple: "#792aac", blue: "#35399d",
+  brown: "#724728", green: "#546d1b", red: "#a12722", black: "#141519",
+};
+const TERRACOTTA = {
+  white: "#d1b1a1", orange: "#a15325", magenta: "#95576c", light_blue: "#706c8a", yellow: "#ba8523", lime: "#677535",
+  pink: "#a14e4e", gray: "#392a23", light_gray: "#876a61", cyan: "#575b5b", purple: "#764656", blue: "#4a3b5b",
+  brown: "#4d3323", green: "#4c532a", red: "#8f3d2e", black: "#251610",
+};
+/** Lightens (+) or darkens (−) a hex colour by a fraction. */
+const shade = (hex, f) => "#" + [1, 3, 5].map((i) => {
+  const v = parseInt(hex.slice(i, i + 2), 16);
+  return Math.round(f > 0 ? v + (255 - v) * f : v * (1 + f)).toString(16).padStart(2, "0");
+}).join("");
+
+/** The colourable block families: [suffix, display name, preview colour, shape]. */
+export const COLOUR_FAMILIES = [
+  ["wool", "Wool", (c) => WOOL[c], "cube"],
+  ["terracotta", "Terracotta", (c) => TERRACOTTA[c], "cube"],
+  ["concrete", "Concrete", (c) => shade(WOOL[c], -0.1), "cube"],
+  ["concrete_powder", "Concrete Powder", (c) => shade(WOOL[c], 0.25), "cube"],
+  ["carpet", "Carpet", (c) => WOOL[c], "carpet"],
+];
+const known = new Set(BLOCKS.map((b) => b.id));
+for (const [fam, famName, col, shape] of COLOUR_FAMILIES)
+  for (const c of COLOURS) {
+    const id = `minecraft:${c}_${fam}`;
+    if (!known.has(id)) BLOCKS.push({ group: "Colours", id, name: colourName(c) + " " + famName, color: col(c), shape, opacity: 1 });
+  }
+
+const SLOT = new RegExp(`^minecraft:white_(${COLOUR_FAMILIES.map(([f]) => f).join("|")})// Block catalogue and block-state helpers.
+// Pure data + functions: no DOM, no three.js. Safe to port to Java later.
+//
+// Colours are flat approximations used only for the editor preview;
+// they are not Minecraft textures.
+
+/** @typedef {{group:string, id:string, name:string, color:string, shape:"cube"|"stairs"|"slab"|"pane"|"plant"|"carpet", opacity:number}} BlockDef */
+
+/** @type {BlockDef[]} */
+export const BLOCKS = [
+  ["Masonry", "minecraft:stone_bricks", "Stone Bricks", "#7c7c7a", "cube"],
+  ["Masonry", "minecraft:bricks", "Bricks", "#94604f", "cube"],
+  ["Masonry", "minecraft:mud_bricks", "Mud Bricks", "#8a6a50", "cube"],
+  ["Masonry", "minecraft:deepslate_bricks", "Deepslate Bricks", "#4a4a4d", "cube"],
+  ["Masonry", "minecraft:polished_blackstone_bricks", "Blackstone Bricks", "#38323b", "cube"],
+  ["Stone", "minecraft:polished_andesite", "Polished Andesite", "#878a88", "cube"],
+  ["Stone", "minecraft:smooth_stone", "Smooth Stone", "#a0a0a0", "cube"],
+  ["Stone", "minecraft:quartz_block", "Quartz Block", "#ebe5dd", "cube"],
+  ["Stone", "minecraft:quartz_pillar", "Quartz Pillar", "#e4ddd3", "cube"],
+  ["Stone", "minecraft:smooth_sandstone", "Smooth Sandstone", "#dcd2a3", "cube"],
+  ["Stone", "minecraft:white_terracotta", "White Terracotta", "#cfb1a1", "cube"],
+  ["Stone", "minecraft:terracotta", "Terracotta", "#975c42", "cube"],
+  ["Stone", "minecraft:white_concrete", "White Concrete", "#cfd4d5", "cube"],
+  ["Stone", "minecraft:packed_mud", "Packed Mud", "#8e6c55", "cube"],
+  ["Wood", "minecraft:oak_planks", "Oak Planks", "#a3844f", "cube"],
+  ["Wood", "minecraft:spruce_planks", "Spruce Planks", "#735632", "cube"],
+  ["Wood", "minecraft:dark_oak_planks", "Dark Oak Planks", "#46301a", "cube"],
+  ["Accent", "minecraft:copper_block", "Copper Block", "#c06d50", "cube"],
+  ["Accent", "minecraft:oxidized_copper", "Oxidized Copper", "#55a18c", "cube"],
+  ["Glass", "minecraft:glass_pane", "Glass Pane", "#a9d3df", "pane", 0.45],
+  ["Glass", "minecraft:light_gray_stained_glass_pane", "Light Gray Glass Pane", "#8c9497", "pane", 0.6],
+  ["Glass", "minecraft:glass", "Glass", "#c3e2ea", "cube", 0.35],
+  ["Stairs", "minecraft:stone_brick_stairs", "Stone Brick Stairs", "#7c7c7a", "stairs"],
+  ["Stairs", "minecraft:quartz_stairs", "Quartz Stairs", "#ebe5dd", "stairs"],
+  ["Stairs", "minecraft:smooth_sandstone_stairs", "Sandstone Stairs", "#dcd2a3", "stairs"],
+  ["Stairs", "minecraft:dark_oak_stairs", "Dark Oak Stairs", "#46301a", "stairs"],
+  ["Stairs", "minecraft:brick_stairs", "Brick Stairs", "#94604f", "stairs"],
+  ["Slabs", "minecraft:stone_brick_slab", "Stone Brick Slab", "#7c7c7a", "slab"],
+  ["Slabs", "minecraft:smooth_stone_slab", "Smooth Stone Slab", "#a0a0a0", "slab"],
+  ["Slabs", "minecraft:quartz_slab", "Quartz Slab", "#ebe5dd", "slab"],
+  ["Slabs", "minecraft:dark_oak_slab", "Dark Oak Slab", "#46301a", "slab"],
+  ["Slabs", "minecraft:brick_slab", "Brick Slab", "#94604f", "slab"],
+  // Roof materials: each full block has matching stairs and slab (see MATERIALS).
+  ["Roof", "minecraft:deepslate_tiles", "Deepslate Tiles", "#36363a", "cube"],
+  ["Roof", "minecraft:deepslate_tile_stairs", "Deepslate Tile Stairs", "#36363a", "stairs"],
+  ["Roof", "minecraft:deepslate_tile_slab", "Deepslate Tile Slab", "#36363a", "slab"],
+  ["Roof", "minecraft:spruce_stairs", "Spruce Stairs", "#735632", "stairs"],
+  ["Roof", "minecraft:spruce_slab", "Spruce Slab", "#735632", "slab"],
+  ["Roof", "minecraft:waxed_cut_copper", "Waxed Cut Copper", "#bf6b51", "cube"],
+  ["Roof", "minecraft:waxed_cut_copper_stairs", "Waxed Cut Copper Stairs", "#bf6b51", "stairs"],
+  ["Roof", "minecraft:waxed_cut_copper_slab", "Waxed Cut Copper Slab", "#bf6b51", "slab"],
+  ["Roof", "minecraft:waxed_oxidized_cut_copper", "Waxed Oxidized Cut Copper", "#4f9e8a", "cube"],
+  ["Roof", "minecraft:waxed_oxidized_cut_copper_stairs", "Waxed Oxidized Cut Copper Stairs", "#4f9e8a", "stairs"],
+  ["Roof", "minecraft:waxed_oxidized_cut_copper_slab", "Waxed Oxidized Cut Copper Slab", "#4f9e8a", "slab"],
+  ["Roof", "minecraft:polished_blackstone_brick_stairs", "Blackstone Brick Stairs", "#38323b", "stairs"],
+  ["Roof", "minecraft:polished_blackstone_brick_slab", "Blackstone Brick Slab", "#38323b", "slab"],
+  ["Roof", "minecraft:mud_brick_stairs", "Mud Brick Stairs", "#8a6a50", "stairs"],
+  ["Roof", "minecraft:mud_brick_slab", "Mud Brick Slab", "#8a6a50", "slab"],
+  // Garden roofs
+  ["Garden", "minecraft:grass_block", "Grass Block", "#5d8c3a", "cube"],
+  ["Garden", "minecraft:short_grass", "Short Grass", "#6a9a3e", "plant"],
+  ["Garden", "minecraft:tall_grass", "Tall Grass", "#6a9a3e", "plant"],
+  ["Garden", "minecraft:poppy", "Poppy", "#c0302a", "plant"],
+  ["Garden", "minecraft:dandelion", "Dandelion", "#e8d23a", "plant"],
+  ["Garden", "minecraft:cornflower", "Cornflower", "#4a6ad8", "plant"],
+  ["Garden", "minecraft:oxeye_daisy", "Oxeye Daisy", "#e4e4da", "plant"],
+  ["Garden", "minecraft:allium", "Allium", "#a860d0", "plant"],
+  ["Garden", "minecraft:azure_bluet", "Azure Bluet", "#d0dae4", "plant"],
+  ["Garden", "minecraft:red_tulip", "Red Tulip", "#d03030", "plant"],
+  ["Garden", "minecraft:white_tulip", "White Tulip", "#ececec", "plant"],
+  ["Garden", "minecraft:lily_of_the_valley", "Lily of the Valley", "#f4f4f4", "plant"],
+  ["Garden", "minecraft:azalea", "Azalea", "#5a7d2a", "plant"],
+  ["Garden", "minecraft:flowering_azalea", "Flowering Azalea", "#7d8d4a", "plant"],
+);
+/** Is this block a colour slot (a white wool, terracotta, concrete, concrete powder or carpet)? */
+export const isColourSlot = (s) => SLOT.test(parseState(s).id);
+/** Turns a colour slot into the given colour; any other block is returned unchanged. */
+export function recolour(s, colour) {
+  const { id, props } = parseState(s);
+  const m = SLOT.exec(id);
+  return m ? makeState(`minecraft:${colour}_${m[1]}`, props) : s;
+}
+
 /** @type {Record<string, BlockDef>} */
 export const BMAP = Object.fromEntries(BLOCKS.map((b) => [b.id, b]));
 
@@ -130,6 +257,7 @@ const SHAPE_DEFAULTS = {
   pane: { north: "false", south: "false", east: "false", west: "false", waterlogged: "false" },
   cube: {},
   plant: {},
+  carpet: {},
 };
 /** Blocks whose properties differ from the rest of their shape. */
 const ID_DEFAULTS = {
