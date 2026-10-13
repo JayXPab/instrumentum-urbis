@@ -22,7 +22,27 @@ npm install      # first time only, and after dependencies change
 npm run dev      # start the editor at http://localhost:5173
 npm test         # run the core tests
 npm run build    # production build into dist/
+npm run desktop        # open the desktop app (Tauri) with live reload
+npm run desktop:build  # build the Windows installer into src-tauri/target/release/bundle/
 ```
+
+The desktop commands need Rust and, on Windows, the Microsoft C++ Build Tools
+(see `README.md`). The first desktop run compiles for a few minutes; later runs
+are quick.
+
+## Web app and desktop app
+
+The web app prototype is finished and frozen at the git tag **`web-v1.0`**
+(roadmap steps 1–9). To get it back: `git checkout web-v1.0`, then
+`npm install` and `npm run dev`. From that tag on, the main code is the desktop
+app: same editor, run inside a Tauri window, and it may gain features the
+browser cannot do (reading the Minecraft installation, saving into folders).
+`npm run dev` still opens it in a browser for quick testing, but browser-only
+use is no longer a goal.
+
+The owner uses Windows 10 (laptop) and Windows 11 (desktop), so the desktop app
+targets Windows first. Claude's cloud sessions run Linux: they can compile the
+app and take screenshots of it, but every desktop step must be tried on Windows.
 
 ## Tech stack
 
@@ -30,7 +50,8 @@ npm run build    # production build into dist/
   once the core model settles; JSDoc types are used meanwhile.
 - three.js for the 3D view.
 - Node's built-in test runner for tests (no test framework dependency).
-- Planned: wrap as a desktop app with Tauri; later, a Java mod (Fabric) like Axiom.
+- Tauri 2 for the desktop app: a small Rust program (`src-tauri/`) that opens the
+  editor in a window (WebView2 on Windows). Later, a Java mod (Fabric) like Axiom.
 
 ## Code layout
 
@@ -57,6 +78,11 @@ src/core/             the facade rules: NO DOM, NO three.js
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
   meshes.js           block-state -> three.js meshes, guide lines, labels
+src-tauri/             desktop app shell (Rust): window, settings, later file access
+  tauri.conf.json     app name, window size, which commands build the editor
+  src/lib.rs          the Rust program; desktop-only commands go here
+  capabilities/       what the editor page is allowed to ask Rust to do
+vite.config.js        dev server on port 5173 (the desktop app expects it)
 tests/                tests for src/core (one file per area)
 docs/concept.pdf      original concept document
 ```
@@ -257,10 +283,16 @@ need a bump.
    gradient bands (checked in game). Later: dormers, hipped mid-row roofs.
 9. ✅ Schematic import: .schem/.litematic/.bp, Core Wall and edges, whole facade
    or one stage, recentred to x = 0 (checked in game).
-10. ⬜ Desktop app (Tauri); later the in-game mod. Plan for it: draw every block
-    with its real model and texture, read from the user's own Minecraft
-    installation (the tool must not ship Mojang's assets); save exports straight
-    into Axiom's blueprints folder.
+10. 🔶 Desktop app (Tauri). Web app frozen at tag `web-v1.0`. Steps:
+    1. ✅ Tauri shell: the editor opens in its own window (`npm run desktop`).
+    2. ⬜ Save files natively: pick a folder once, exports go straight there
+       (e.g. Axiom's blueprints folder). Browser-style downloads may not work in
+       the window yet; check on Windows.
+    3. ⬜ Find the user's Minecraft installation and read block textures from it
+       (the tool must not ship Mojang's assets).
+    4. ⬜ Draw blocks with textures, then with their real models.
+    5. ⬜ Windows installer and app icon.
+11. ⬜ In-game mod (Fabric).
 
 ## Known limits
 

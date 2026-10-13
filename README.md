@@ -21,6 +21,37 @@ npm run dev
 
 Then open http://localhost:5173 in your browser.
 
+The finished browser version is kept at the git tag `web-v1.0`.
+
+## Desktop app (Windows)
+
+The editor also runs as a desktop app built with [Tauri](https://tauri.app).
+One-time setup on Windows 10 or 11:
+
+1. Install [Node.js](https://nodejs.org) 22 or newer (if not already).
+2. Install the **Microsoft C++ Build Tools**: download "Build Tools for Visual
+   Studio" from https://visualstudio.microsoft.com/visual-cpp-build-tools/, run
+   it, tick **Desktop development with C++**, and install.
+3. Install **Rust**: download and run `rustup-init.exe` from
+   https://rustup.rs, and accept the defaults.
+4. WebView2 is already part of Windows 10 (recent updates) and Windows 11. If
+   the app window stays blank, install the "Evergreen Bootstrapper" from
+   https://developer.microsoft.com/microsoft-edge/webview2/.
+5. Close and reopen your terminal so it finds the new tools.
+
+Then, in the project folder:
+
+```
+npm install
+npm run desktop
+```
+
+The first run compiles for a few minutes; after that it opens quickly. Changes
+to the editor's code show up in the window straight away.
+
+To build an installer: `npm run desktop:build`. The installers land in
+`src-tauri\target\release\bundle\` (`msi\` and `nsis\`).
+
 ## Using the editor
 
 - **Stage editor**: pick Base, Body or Capital, then a variant. Click in the 3D
