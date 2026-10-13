@@ -4,6 +4,7 @@
 import { BMAP } from "./blocks.js";
 import { K, unK, bounds, clamp } from "./facade.js";
 import { roofBlocks } from "./roof.js";
+import { cornerOf, buildCorner } from "./corner.js";
 
 /** Small seeded random generator so a building can be regenerated exactly. */
 export function mulberry32(a) {
@@ -19,8 +20,12 @@ export function mulberry32(a) {
 /** Shallowest building the facade allows: its recesses plus a back wall. */
 export const minDepth = (p) => -bounds(p).zMin + 2;
 
-/** Depth of the chosen building in blocks: assembly.depth within the depth range, never shallower than the facade allows. */
-export const buildingDepth = (p) => Math.max(clamp(p.assembly.depth ?? p.depthMin, p.depthMin, p.depthMax), minDepth(p));
+/**
+ * Depth of the chosen building in blocks: assembly.depth within the depth range,
+ * never shallower than the facade allows. Corner buildings are square: as deep as wide.
+ */
+export const buildingDepth = (p) =>
+  cornerOf(p) ? p.width : Math.max(clamp(p.assembly.depth ?? p.depthMin, p.depthMin, p.depthMax), minDepth(p));
 
 /**
  * @typedef {{s:string, kind:"base"|"body"|"capital"|"party"|"roof", copy?:number}} Cell
@@ -59,6 +64,14 @@ export function assemble(p) {
   for (let i = 0; i < nb; i++) put(body, "body", i, nb);
   put(p.stages.capital[a.capital], "capital", 0, 1);
 
+  // Corner buildings: the same facade turned to face the side street as well.
+  const corner = cornerOf(p);
+  if (corner) {
+    const both = buildCorner(cells, p, corner);
+    cells.clear();
+    for (const [k, c] of both) cells.set(k, c);
+  }
+
   // Party walls: side walls at the outer columns and a back wall,
   // filling only cells the facade left empty.
   const pal = (p.partyWall || []).filter((e) => BMAP[e.block] && e.weight > 0);
@@ -79,6 +92,8 @@ export function assemble(p) {
     for (let y = 0; y < y0; y++) {
       for (let z = -1; z >= zBack; z--)
         for (const x of [b.xMin, b.xMax]) {
+          // A corner building has its side facade here instead of a party wall.
+          if (corner && x === (corner.side === "right" ? b.xMax : b.xMin)) continue;
           const k = K(x, y, z);
           if (!cells.has(k)) cells.set(k, { s: pick(), kind: "party" });
         }

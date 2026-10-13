@@ -150,10 +150,40 @@ export function fullState(s) {
   return makeState(id, all);
 }
 
-/** Mirrors a block state across the x axis (east <-> west). */
+/** Mirrors a block state across the x axis: east <-> west, and stair corner shapes left <-> right. */
 export function mirrorState(s) {
   const { id, props } = parseState(s);
   if (props.facing === "east") props.facing = "west";
   else if (props.facing === "west") props.facing = "east";
+  if (props.shape) props.shape = props.shape.replace(/left|right/, (m) => (m === "left" ? "right" : "left"));
+  // Side connections (panes, walls) swap sides too.
+  if ("east" in props || "west" in props) {
+    const e = props.east, w = props.west;
+    delete props.east; delete props.west;
+    if (w !== undefined) props.east = w;
+    if (e !== undefined) props.west = e;
+  }
+  return makeState(id, props);
+}
+
+/** One quarter turn anticlockwise seen from above: north -> west -> south -> east -> north. */
+const TURN = { north: "west", west: "south", south: "east", east: "north" };
+
+/**
+ * Turns a block state by quarter turns anticlockwise (seen from above).
+ * Facing, axis and side connections all turn; stair shapes stay as they are.
+ */
+export function rotateState(s, turns = 1) {
+  let { id, props } = parseState(s);
+  for (let t = 0; t < ((turns % 4) + 4) % 4; t++) {
+    const next = {};
+    for (const [k, v] of Object.entries(props)) {
+      if (k === "facing") next.facing = TURN[v] || v;
+      else if (k === "axis") next.axis = v === "x" ? "z" : v === "z" ? "x" : v;
+      else if (k in TURN) next[TURN[k]] = v;
+      else next[k] = v;
+    }
+    props = next;
+  }
   return makeState(id, props);
 }
