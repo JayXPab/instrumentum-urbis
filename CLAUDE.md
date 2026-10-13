@@ -44,6 +44,12 @@ The owner uses Windows 10 (laptop) and Windows 11 (desktop), so the desktop app
 targets Windows first. Claude's cloud sessions run Linux: they can compile the
 app and take screenshots of it, but every desktop step must be tried on Windows.
 
+Windows lessons so far: Vite must not watch `src-tauri/` (the compiler locks its
+files: EBUSY crash); the first Rust build ran the laptop out of memory, so
+`src-tauri/.cargo/config.toml` limits it to 2 jobs and libraries build without
+debug info; the project must live outside OneDrive. The owner downloads branch
+ZIPs (no Git yet), so make sure fixes are on the branch they download.
+
 ## Tech stack
 
 - Plain JavaScript (ES modules), built with Vite. Moving to TypeScript is planned
@@ -284,7 +290,8 @@ need a bump.
 9. ✅ Schematic import: .schem/.litematic/.bp, Core Wall and edges, whole facade
    or one stage, recentred to x = 0 (checked in game).
 10. 🔶 Desktop app (Tauri). Web app frozen at tag `web-v1.0`. Steps:
-    1. ✅ Tauri shell: the editor opens in its own window (`npm run desktop`).
+    1. ✅ Tauri shell: the editor opens in its own window (`npm run desktop`),
+       checked on the owner's Windows 10 laptop.
     2. ⬜ Save files natively: pick a folder once, exports go straight there
        (e.g. Axiom's blueprints folder). Browser-style downloads may not work in
        the window yet; check on Windows.
