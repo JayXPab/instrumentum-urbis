@@ -13,8 +13,18 @@ import { colourLists, buildingColours } from "./colour.js";
 
 /** @typedef {{base:number, body:number, capital:number, roof:number, floors:number, depth:number, type:string, colour:string|null, baseColour:string|null}} Combo */
 
+/** Export formats, in the order they're offered: Axiom, WorldEdit, Litematica. */
+export const FORMATS = /** @type {const} */ (["bp", "schem", "litematic"]);
+export const FORMAT_NAMES = { bp: "Axiom .bp", schem: "WorldEdit .schem", litematic: "Litematica .litematic" };
+
 /** Bulk export settings saved with the project. amount null = all combinations. */
-export const bulkDefaults = () => ({ format: "bp", amount: null, random: false, seed: 1, limit: 200 });
+export const bulkDefaults = () => ({ formats: ["bp"], amount: null, random: false, seed: 1, limit: 200 });
+
+/** The ticked formats in the usual order; Axiom alone if none are ticked. */
+export const bulkFormats = (p) => {
+  const f = FORMATS.filter((x) => (p.bulk?.formats || []).includes(x));
+  return f.length ? f : ["bp"];
+};
 
 /**
  * The i-th combination, counting floors fastest, then depth, type, colour, base colour,

@@ -47,6 +47,7 @@ src/core/             the facade rules: NO DOM, NO three.js
   nbt.js              NBT (Minecraft binary format) writer/reader, varints
   schem.js            assembled building -> Sponge v3 .schem; pane connections
   blueprint.js        assembled building -> Axiom .bp (16³ sections, file layout)
+  litematic.js        assembled building -> Litematica .litematic (version 7)
   bulk.js             combination generator: all / first N / random sample, seeds
   zip.js              minimal stored (uncompressed) zip writer
   roof.js             roof styles: shapes, materials/gradient, garden planting
@@ -162,6 +163,15 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   The thumbnail is a 256 px render of the building made in the browser.
 - `.bp` writes every block property (`fullState`), filling defaults the editor
   leaves out. `.schem` writes states as stored.
+- **.litematic** is Litematica's format version 7 (gzipped NBT): metadata (with
+  an optional 140 px preview, one ARGB int per pixel) and one region whose
+  Position is its lowest corner relative to the paste point. Blocks run x, then
+  z, then y; air is palette entry 0; max(2, ceil(log2 palette)) bits per entry,
+  packed tightly so an entry may run on into the next long (unlike chunks and
+  .bp). Field names checked against Litematica's source (LTS/1.21.11 branch of
+  sakura-ryoko/litematica) and Litemapy.
+- Bulk export formats are tick boxes (`bulk.formats`); with more than one, each
+  format gets its own folder in the zip. Older `bulk.format` loads as a list.
 - Data version per game version is in `DATA_VERSIONS` (1.21.11 = 4671).
 - The editor stores bare glass panes; the exporter adds their north/south/east/west
   connections. Other blocks are exported exactly as stored.
@@ -216,8 +226,8 @@ need a bump.
 2. ✅ 3D viewer
 3. ✅ Stage editor (3D clicking + elevation grid, mirror, undo)
 4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
-5. 🔶 Export: WorldEdit `.schem` ✅ (checked in game on 1.21.11). Axiom `.bp` ✅
-   (checked in game on 1.21.11). Next: Litematica `.litematic`.
+5. 🔶 Export: WorldEdit `.schem` ✅ and Axiom `.bp` ✅ (checked in game on
+   1.21.11). Litematica `.litematic` built (awaiting in-game check).
 6. ✅ Combination generator with bulk export (checked in game with Axiom)
 7. 🔶 Corners: sharp and chamfered, merge/trim, plot as deep as the mid-row
    buildings, L-shaped roofs that join the mid-row roofs: built (awaiting

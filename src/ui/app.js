@@ -14,7 +14,8 @@ import { upgradeProject } from "../core/project.js";
 import { sampleProject } from "../core/sample.js";
 import { toSchem, schemName } from "../core/schem.js";
 import { blueprintParts, packBlueprint } from "../core/blueprint.js";
-import { bulkDefaults, bulkCount, chooseCombos, forCombo, indexCsv } from "../core/bulk.js";
+import { toLitematic } from "../core/litematic.js";
+import { bulkDefaults, bulkCount, chooseCombos, forCombo, indexCsv, FORMATS, FORMAT_NAMES, bulkFormats } from "../core/bulk.js";
 import { ZipWriter } from "../core/zip.js";
 import { roofDefaults, SLOPED } from "../core/roof.js";
 import { typeList, TYPE_NAMES } from "../core/corner.js";
@@ -304,10 +305,10 @@ new ResizeObserver(() => { resize(); renderGrid(); }).observe(canvas.parentEleme
 
 /**
  * Pictures an assembled building alone (no guides, no fading) from the
- * front-right, as a square PNG with a transparent background.
- * @returns {Promise<Uint8Array>}
+ * front-right, as square RGBA pixels (rows top to bottom), transparent background.
+ * @returns {Uint8ClampedArray}
  */
-async function thumbnailPng(p = P, size = 256) {
+function renderPicture(p = P, size = 256) {
   const g = new THREE.Group();
   for (const [k, c] of assemble(p).cells) { const [x, y, z] = unK(k); g.add(blockObject(c.s, x, y, z)); }
   const shown = [world.visible, helpers.visible, hover.visible], bg = scene.background, alpha = renderer.getClearAlpha();
@@ -341,11 +342,16 @@ async function thumbnailPng(p = P, size = 256) {
   }
 
   // WebGL rows run bottom to top; images run top to bottom.
+  const out = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y++) out.set(px.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
+  return out;
+}
+
+/** The building's picture as a PNG (Axiom blueprint thumbnails). */
+async function thumbnailPng(p = P, size = 256) {
   const c2 = document.createElement("canvas");
   c2.width = c2.height = size;
-  const img = new ImageData(size, size);
-  for (let y = 0; y < size; y++) img.data.set(px.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
-  c2.getContext("2d").putImageData(img, 0, 0);
+  c2.getContext("2d").putImageData(new ImageData(renderPicture(p, size), size, size), 0, 0);
   const blob = await new Promise((res) => c2.toBlob(res, "image/png"));
   return new Uint8Array(await blob.arrayBuffer());
 }
@@ -661,10 +667,10 @@ function renderBuildPanel() {
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
     $("schemInfo").textContent = `${schemName(P)}: ${w} × ${h} × ${l}, ${blocks.toLocaleString()} blocks. The paste point is marked in the 3D view.`;
-    $("dlSchem").disabled = $("dlBp").disabled = false;
+    $("dlSchem").disabled = $("dlBp").disabled = $("dlLitematic").disabled = false;
   } catch (e) {
     $("schemInfo").textContent = e.message;
-    $("dlSchem").disabled = $("dlBp").disabled = true;
+    $("dlSchem").disabled = $("dlBp").disabled = $("dlLitematic").disabled = true;
   }
   renderTypes();
   renderColours();
@@ -880,6 +886,25 @@ async function blueprintFile(p = P) {
   const parts = blueprintParts(p);
   return { bytes: packBlueprint(parts.header, await thumbnailPng(p), await gzip(parts.blocks)), blocks: parts.count };
 }
+/** The building's picture for Litematica's preview: one ARGB number per pixel. */
+function litematicPreview(p = P, size = 140) {
+  const px = renderPicture(p, size);
+  const out = new Array(size * size);
+  for (let i = 0; i < out.length; i++)
+    out[i] = (px[i * 4 + 3] << 24) | (px[i * 4] << 16) | (px[i * 4 + 1] << 8) | px[i * 4 + 2];
+  return out;
+}
+/** Builds a Litematica file, preview picture included. */
+async function litematicFile(p = P) {
+  const r = toLitematic(p, litematicPreview(p));
+  return { bytes: await gzip(r.bytes), blocks: r.blocks };
+}
+$("dlLitematic").onclick = async () => {
+  let r;
+  try { r = await litematicFile(); } catch (e) { return toast(e.message); }
+  download(schemName(P) + ".litematic", new Blob([r.bytes]));
+  toast("Downloaded " + schemName(P) + ".litematic");
+};
 $("dlBp").onclick = async () => {
   let bytes;
   try { ({ bytes } = await blueprintFile()); } catch (e) { return toast(e.message); }
@@ -1130,7 +1155,7 @@ $("roofDel").onclick = () => {
 };
 
 /* ---------- bulk export ---------- */
-const FORMAT_NAMES = { bp: ".bp", schem: ".schem", both: ".bp + .schem" };
+const FORMAT_BOXES = { bp: "bulkFmtBp", schem: "bulkFmtSchem", litematic: "bulkFmtLitematic" };
 let bulkRun = null; // { cancelled } while a bulk export is running
 
 /** Lets the page repaint and handle clicks. (setTimeout would be slowed to 1 s in a background tab.) */
@@ -1139,7 +1164,8 @@ const yieldToPage = () => new Promise((r) => { const c = new MessageChannel(); c
 function renderBulk() {
   const B = P.bulk;
   const { n, total } = bulkCount(P);
-  $("bulkFmt").value = B.format;
+  const fmts = bulkFormats(P);
+  for (const f of FORMATS) $(FORMAT_BOXES[f]).checked = fmts.includes(f);
   $("bulkN").value = n;
   $("bulkN").max = total;
   $("bulkOf").textContent = n === total ? `(all ${total.toLocaleString()})` : `of ${total.toLocaleString()}`;
@@ -1151,17 +1177,24 @@ function renderBulk() {
   $("bulkRand").disabled = !some;
   $("bulkRandLbl").style.opacity = some ? "" : "0.5";
   if (!bulkRun) {
-    const files = n * (B.format === "both" ? 2 : 1);
+    const files = n * fmts.length;
     $("bulkInfo").textContent = !n
       ? "Nothing to export: add a variant to every stage."
-      : `${n.toLocaleString()} building${n === 1 ? "" : "s"}, ${files.toLocaleString()} ${FORMAT_NAMES[B.format]} file${files === 1 ? "" : "s"}` +
+      : `${n.toLocaleString()} building${n === 1 ? "" : "s"}, ${files.toLocaleString()} file${files === 1 ? "" : "s"} (${fmts.map((f) => FORMAT_NAMES[f]).join(", ")})` +
         (n === total ? "" : B.random ? ", picked at random" : ", the first in order") +
         (n > B.limit ? `. That’s more than ${B.limit.toLocaleString()}, so you’ll be asked first.` : ".");
     $("bulkGo").disabled = !n || checks(P).some((c) => c[0] === "err");
   }
 }
 const bulkSet = (fn) => (e) => { fn(e.target); save(); renderBulk(); };
-$("bulkFmt").onchange = bulkSet((t) => { P.bulk.format = t.value; });
+for (const f of FORMATS)
+  $(FORMAT_BOXES[f]).onchange = (e) => {
+    const on = e.target.checked, now = bulkFormats(P);
+    // Keep at least one format ticked.
+    if (!on && now.length === 1 && now[0] === f) { e.target.checked = true; return toast("Keep at least one format ticked."); }
+    P.bulk.formats = FORMATS.filter((x) => (x === f ? on : now.includes(x)));
+    save(); renderBulk();
+  };
 $("bulkN").onchange = bulkSet((t) => {
   const v = parseInt(t.value, 10);
   // Empty, or at least the total, means all combinations.
@@ -1180,7 +1213,7 @@ $("bulkGo").onclick = async () => {
 
   const run = (bulkRun = { cancelled: false });
   const P0 = JSON.parse(JSON.stringify(P)); // edits made while it runs don't mix into this export
-  const fmts = B.format === "both" ? ["bp", "schem"] : [B.format];
+  const fmts = bulkFormats(P0);
   const zip = new ZipWriter();
   const rows = [];
   $("bulkGo").disabled = true;
@@ -1195,11 +1228,15 @@ $("bulkGo").onclick = async () => {
       const q = forCombo(P0, combos[i]);
       const name = schemName(q);
       for (const f of fmts) {
-        // With both formats, each gets its own folder; otherwise the files sit at the top.
+        // With more than one format, each gets its own folder; otherwise the files sit at the top.
         const path = (fmts.length > 1 ? f + "/" : "") + name + "." + f;
         let blocks;
         if (f === "bp") {
           const r = await blueprintFile(q);
+          zip.add(path, r.bytes);
+          blocks = r.blocks;
+        } else if (f === "litematic") {
+          const r = await litematicFile(q);
           zip.add(path, r.bytes);
           blocks = r.blocks;
         } else {

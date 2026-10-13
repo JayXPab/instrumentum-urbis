@@ -122,7 +122,11 @@ test("a version 1 project loads with its depth as a range of one", () => {
   assert.equal(p.assembly.depth, 11);
   assert.equal(p.buildingDepth, undefined);
   assert.deepEqual(p.roofs, []);
-  assert.equal(p.bulk.format, "bp");
+  assert.deepEqual(p.bulk.formats, ["bp"]);
+  // An older single choice of "both" becomes .bp and .schem ticked
+  const q = upgradeProject({ ...structuredClone(v1), bulk: { format: "both" } });
+  assert.deepEqual(q.bulk.formats, ["bp", "schem"]);
+  assert.equal("format" in q.bulk, false);
   assert.deepEqual(upgradeProject(structuredClone(p)), p, "upgrading again changes nothing");
 });
 

@@ -44,6 +44,10 @@ export function upgradeProject(p) {
   p.assembly.baseColour ??= "white";
   p.partyWall ??= [];
   p.roofs = (p.roofs || []).map((r) => roofDefaults(r));
+  // Bulk export used to offer one format, or "both"; now any mix can be ticked.
+  if (p.bulk && typeof p.bulk.format === "string" && !p.bulk.formats)
+    p.bulk.formats = p.bulk.format === "both" ? ["bp", "schem"] : [p.bulk.format];
+  if (p.bulk) delete p.bulk.format;
   p.bulk = { ...bulkDefaults(), ...p.bulk };
   return p;
 }

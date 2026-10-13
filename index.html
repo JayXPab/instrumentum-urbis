@@ -152,6 +152,7 @@
         <div class="acts">
           <button class="btn primary" id="dlSchem">Download .schem</button>
           <button class="btn primary" id="dlBp">Download .bp (Axiom)</button>
+          <button class="btn primary" id="dlLitematic">Download .litematic</button>
         </div>
         <p class="lbl" id="schemInfo" style="margin:0"></p>
       </div>
@@ -300,14 +301,12 @@
       <div class="sec">
         <h2>Bulk export</h2>
         <p class="lbl" style="margin:0">Builds many combinations at once and downloads them in one .zip, with an index.csv listing each building.</p>
-        <div class="fld">
-          <label for="bulkFmt">Format</label>
-          <select id="bulkFmt">
-            <option value="bp">Axiom .bp</option>
-            <option value="schem">WorldEdit .schem</option>
-            <option value="both">Both (.bp and .schem folders)</option>
-          </select>
-        </div>
+        <fieldset class="fld" style="border:0;padding:0;margin:0;gap:6px">
+          <legend class="lbl" style="padding:0;margin-bottom:4px">Formats (more than one: a folder each)</legend>
+          <label class="chk"><input type="checkbox" id="bulkFmtBp"> Axiom .bp</label>
+          <label class="chk"><input type="checkbox" id="bulkFmtSchem"> WorldEdit .schem</label>
+          <label class="chk"><input type="checkbox" id="bulkFmtLitematic"> Litematica .litematic</label>
+        </fieldset>
         <div class="row2">
           <div class="fld"><label for="bulkN">How many <span class="rangeval" id="bulkOf"></span></label><input type="number" id="bulkN" min="1"></div>
           <div class="fld" title="Sets every building's party-wall pattern, and which buildings a random sample picks. The same seed always gives the same result."><label for="bulkSeed">Seed</label><input type="number" id="bulkSeed" min="0"></div>
