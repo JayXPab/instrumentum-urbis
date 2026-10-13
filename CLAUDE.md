@@ -145,7 +145,7 @@ that fill in defaults on load (like `bulk`, added after v1) don't need a bump.
 4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
 5. 🔶 Export: WorldEdit `.schem` ✅ (checked in game on 1.21.11). Axiom `.bp` ✅
    (checked in game on 1.21.11). Next: Litematica `.litematic`.
-6. 🔶 Combination generator with bulk export: built (awaiting in-game check)
+6. ✅ Combination generator with bulk export (checked in game with Axiom)
 7. ⬜ Corners: sharp, then chamfered, with the merge/trim rule
 8. ⬜ Roofs: gable, mansard, convex mansard, sloped; roof block and gradients
 9. ⬜ Schematic import (user defines the Core Wall; validate and recentre x = 0)
