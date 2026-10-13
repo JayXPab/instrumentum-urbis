@@ -27,6 +27,23 @@ export const TYPE_NAMES = {
 };
 export const CHAMFER_MIN = 1, CHAMFER_MAX = 3;
 
+/** Which building types a project generates (saved with the project). */
+export const typesDefaults = () => ({ mid: true, left: false, right: false, sharp: true, chamfered: false, chamfer: 2 });
+
+/**
+ * The building types ticked in p.types, in order: mid-row, then left and right corners,
+ * sharp before chamfered. A corner with neither style ticked counts as sharp;
+ * with nothing ticked at all, mid-row.
+ * @returns {string[]}
+ */
+export function typeList(p) {
+  const t = { ...typesDefaults(), ...p.types };
+  const out = t.mid ? ["mid"] : [];
+  const styles = [t.sharp || !t.chamfered ? "" : null, t.chamfered ? "-ch" : null].filter((s) => s !== null);
+  for (const [on, code] of [[t.left, "cl"], [t.right, "cr"]]) if (on) for (const s of styles) out.push(code + s);
+  return out.length ? out : ["mid"];
+}
+
 /**
  * The corner of the building in p.assembly, or null for a mid-row building.
  * @returns {{side:"left"|"right", chamfer:number} | null}

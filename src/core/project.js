@@ -7,6 +7,7 @@
 
 import { bulkDefaults } from "./bulk.js";
 import { roofDefaults } from "./roof.js";
+import { typesDefaults } from "./corner.js";
 
 export const FORMAT = "instrumentum-urbis/facade";
 export const FORMAT_VERSION = 2;
@@ -30,6 +31,8 @@ export function upgradeProject(p) {
   p.assembly ??= { base: 0, body: 0, capital: 0, floors: p.floorMin || 3, seed: 1 };
   p.assembly.roof ??= 0;
   p.assembly.depth ??= p.depthMin;
+  p.assembly.type ??= "mid";
+  p.types = { ...typesDefaults(), ...p.types };
   p.partyWall ??= [];
   p.roofs = (p.roofs || []).map((r) => roofDefaults(r));
   p.bulk = { ...bulkDefaults(), ...p.bulk };

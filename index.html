@@ -94,6 +94,7 @@
       </div>
       <div class="sec">
         <h2>This building</h2>
+        <div class="fld"><label for="pickType">Type</label><select id="pickType"></select></div>
         <div class="fld"><label for="pickBase">Base</label><select id="pickBase"></select></div>
         <div class="fld"><label for="pickBody">Body</label><select id="pickBody"></select></div>
         <div class="fld"><label for="pickCap">Capital</label><select id="pickCap"></select></div>
@@ -105,6 +106,22 @@
         <div class="fld" id="depthFld">
           <label for="depth">Depth <span class="rangeval" id="depthVal"></span></label>
           <input type="range" id="depth" min="3" max="64" step="1">
+        </div>
+      </div>
+      <div class="sec">
+        <h2>Building types</h2>
+        <p class="lbl" style="margin:0">Which kinds of building to generate. Each ticked type adds to the combinations.</p>
+        <label class="chk"><input type="checkbox" id="tyMid"> Mid-row</label>
+        <label class="chk"><input type="checkbox" id="tyLeft"> Left corner</label>
+        <label class="chk"><input type="checkbox" id="tyRight"> Right corner</label>
+        <div id="tyCorner" style="display:flex;flex-direction:column;gap:10px;padding-left:24px">
+          <label class="chk"><input type="checkbox" id="tySharp"> Sharp corner</label>
+          <label class="chk"><input type="checkbox" id="tyChamfered"> Chamfered corner</label>
+          <div class="fld" id="tyChamferFld">
+            <label for="tyChamfer">Chamfer <span class="rangeval" id="tyChamferVal"></span></label>
+            <input type="range" id="tyChamfer" min="1" max="3" step="1">
+          </div>
+          <p class="lbl" style="margin:0">Corner buildings are square, as deep as the facade is wide, with the same facade on the side street. The depth range applies to mid-row buildings.</p>
         </div>
       </div>
       <div class="sec" id="roofSec">

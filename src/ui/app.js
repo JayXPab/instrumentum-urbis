@@ -16,6 +16,7 @@ import { blueprintParts, packBlueprint } from "../core/blueprint.js";
 import { bulkDefaults, bulkCount, chooseCombos, forCombo, indexCsv } from "../core/bulk.js";
 import { ZipWriter } from "../core/zip.js";
 import { roofDefaults, SLOPED } from "../core/roof.js";
+import { typeList, TYPE_NAMES, cornerOf } from "../core/corner.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
 
 /* ============================================================
@@ -237,11 +238,20 @@ function render3D() {
 
 function fitView() {
   const b = bounds(P);
-  let h, zMin = b.zMin;
+  let h, zMin = b.zMin, xMin = b.xMin, xMax = b.xMax, zMax = b.zMax;
   if (ui.mode === "edit") h = P.heights[ui.stage];
-  else { h = assemble(P).top; zMin = -buildingDepth(P); }
-  const cx = (b.xMin + b.xMax) / 2, cy = h / 2, cz = (zMin + b.zMax) / 2;
-  const size = Math.max(P.width, h, b.zMax - zMin) + 4;
+  else {
+    // Frame everything that was built: corner buildings reach out to the side street.
+    const A = assemble(P);
+    h = A.top;
+    zMin = -buildingDepth(P);
+    for (const k of A.cells.keys()) {
+      const [x, , z] = unK(k);
+      xMin = Math.min(xMin, x); xMax = Math.max(xMax, x); zMax = Math.max(zMax, z);
+    }
+  }
+  const cx = (xMin + xMax) / 2, cy = h / 2, cz = (zMin + zMax) / 2;
+  const size = Math.max(xMax - xMin + 1, h, zMax - zMin) + 4;
   controls.target.set(cx, cy, cz);
   const dist = (size / (2 * Math.tan((camera.fov * Math.PI) / 360))) * 1.15;
   camera.position.set(cx + dist * 0.55, cy + dist * 0.32, cz + dist * 0.78);
@@ -580,6 +590,10 @@ function renderBuildPanel() {
     s.value = a[key];
     s.disabled = !list.length;
   };
+  const types = typeList(P);
+  if (!types.includes(a.type)) a.type = types[0];
+  $("pickType").innerHTML = types.map((t) => `<option value="${t}"${t === a.type ? " selected" : ""}>${TYPE_NAMES[t]}</option>`).join("");
+  $("pickType").disabled = types.length < 2;
   fillSel("pickBase", P.stages.base, "base");
   fillSel("pickBody", P.stages.body, "body");
   fillSel("pickCap", P.stages.capital, "capital");
@@ -608,7 +622,10 @@ function renderBuildPanel() {
   $("comboN").textContent = n.toLocaleString();
   const roofs = P.roofs.length ? ` × ${P.roofs.length} roof${P.roofs.length === 1 ? "" : "s"}` : "";
   const nd = Math.max(0, P.depthMax - P.depthMin + 1);
-  const depths = nd > 1 ? ` × ${nd} depths` : "";
+  const corners = types.filter((t) => t !== "mid").length;
+  const cornerText = `${corners} corner type${corners === 1 ? "" : "s"}`;
+  const depths = !corners ? (nd > 1 ? ` × ${nd} depths` : "")
+    : types.includes("mid") ? ` × (${nd} mid-row depth${nd === 1 ? "" : "s"} + ${cornerText})` : ` × ${cornerText}`;
   $("comboF").textContent = `${P.stages.base.length} base × ${P.stages.body.length} body × ${P.stages.capital.length} capital${roofs} × ${r} floor count${r === 1 ? "" : "s"}${depths}`;
   try {
     const { size: [w, h, l], blocks } = toSchem(P);
@@ -618,6 +635,7 @@ function renderBuildPanel() {
     $("schemInfo").textContent = e.message;
     $("dlSchem").disabled = $("dlBp").disabled = true;
   }
+  renderTypes();
   renderRoofs();
   renderBulk();
   const rows = $("pwRows");
@@ -754,6 +772,8 @@ $("randomize").onclick = () => {
   a.roof = Math.floor(r() * Math.max(1, P.roofs.length));
   a.floors = P.floorMin + Math.floor(r() * (P.floorMax - P.floorMin + 1));
   a.depth = P.depthMin + Math.floor(r() * (P.depthMax - P.depthMin + 1));
+  const types = typeList(P);
+  a.type = types[Math.floor(r() * types.length)];
   a.seed = Math.floor(r() * 1e9);
   save(); renderBuildPanel(); render3D(); fitView();
 };
@@ -831,6 +851,50 @@ $("dlBp").onclick = async () => {
   download(schemName(P) + ".bp", new Blob([bytes]));
   toast("Downloaded " + schemName(P) + ".bp");
 };
+/* ---------- building types ---------- */
+function renderTypes() {
+  const t = P.types;
+  $("tyMid").checked = t.mid;
+  $("tyLeft").checked = t.left;
+  $("tyRight").checked = t.right;
+  $("tySharp").checked = t.sharp;
+  $("tyChamfered").checked = t.chamfered;
+  $("tyChamfer").value = t.chamfer;
+  $("tyChamferVal").textContent = `${t.chamfer} block${t.chamfer === 1 ? "" : "s"}`;
+  $("tyCorner").hidden = !(t.left || t.right);
+  $("tyChamferFld").hidden = !t.chamfered;
+  // The depth slider only matters for mid-row buildings.
+  if (cornerOf(P)) $("depthFld").hidden = true;
+}
+/** Tick boxes: keep at least one building type, and at least one corner style when corners are on. */
+const typeTick = (id, key, group, msg) => {
+  $(id).onchange = (e) => {
+    const t = P.types;
+    if (!e.target.checked && group.every((k) => k === key || !t[k])) {
+      e.target.checked = true;
+      return toast(msg);
+    }
+    snapshot();
+    t[key] = e.target.checked;
+    save(); renderBuildPanel(); render3D(); fitView();
+  };
+};
+const KINDS = ["mid", "left", "right"], STYLES = ["sharp", "chamfered"];
+typeTick("tyMid", "mid", KINDS, "Keep at least one building type.");
+typeTick("tyLeft", "left", KINDS, "Keep at least one building type.");
+typeTick("tyRight", "right", KINDS, "Keep at least one building type.");
+typeTick("tySharp", "sharp", STYLES, "Keep sharp or chamfered ticked for corner buildings.");
+typeTick("tyChamfered", "chamfered", STYLES, "Keep sharp or chamfered ticked for corner buildings.");
+let chamferDrag = false;
+$("tyChamfer").addEventListener("input", (e) => {
+  if (!chamferDrag) { snapshot(); chamferDrag = true; }
+  P.types.chamfer = +e.target.value;
+  $("tyChamferVal").textContent = `${P.types.chamfer} block${P.types.chamfer === 1 ? "" : "s"}`;
+  save(); render3D();
+});
+$("tyChamfer").addEventListener("change", () => { chamferDrag = false; renderBuildPanel(); });
+$("pickType").onchange = (e) => { P.assembly.type = e.target.value; save(); renderBuildPanel(); render3D(); fitView(); };
+
 /* ---------- roofs ---------- */
 const curRoof = () => (P.roofs.length ? P.roofs[clamp(P.assembly.roof, 0, P.roofs.length - 1)] : null);
 const cubeOptions = (sel) =>

@@ -4,7 +4,7 @@
 import { BMAP } from "./blocks.js";
 import { K, unK, bounds, clamp } from "./facade.js";
 import { roofBlocks } from "./roof.js";
-import { cornerOf, buildCorner } from "./corner.js";
+import { cornerOf, buildCorner, typeList, TYPE_NAMES } from "./corner.js";
 
 /** Small seeded random generator so a building can be regenerated exactly. */
 export function mulberry32(a) {
@@ -131,14 +131,23 @@ export function buildingTitle(p) {
   const floors = clamp(a.floors, p.floorMin, p.floorMax);
   const n = (kind, i) => p.stages[kind][i]?.name ?? "?";
   const roof = roofOf(p);
-  const deep = p.depthMax > p.depthMin ? `, ${buildingDepth(p)} deep` : "";
-  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors${deep}`;
+  const corner = cornerOf(p);
+  const deep = !corner && p.depthMax > p.depthMin ? `, ${buildingDepth(p)} deep` : "";
+  const type = corner ? ", " + TYPE_NAMES[a.type].toLowerCase() : "";
+  return `${n("base", a.base)} / ${n("body", a.body)} / ${n("capital", a.capital)}${roof ? " / " + roof.name : ""}, ${floors} floors${deep}${type}`;
 }
 
-/** Number of distinct buildings the current variants, roofs, floor range and depth range can make. */
+/**
+ * Number of distinct buildings the project can make. Each mid-row building comes
+ * in every depth of the range; corner buildings are square, so they have one depth.
+ * slots = mid-row depths + corner types.
+ */
 export function comboCount(p) {
   const r = Math.max(0, p.floorMax - p.floorMin + 1);
   const roofs = Math.max(1, (p.roofs || []).length);
   const depths = Math.max(0, p.depthMax - p.depthMin + 1);
-  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r * depths, r, roofs, depths };
+  const types = typeList(p);
+  const corners = types.filter((t) => t !== "mid").length;
+  const slots = (types.includes("mid") ? depths : 0) + corners;
+  return { n: p.stages.base.length * p.stages.body.length * p.stages.capital.length * roofs * r * slots, r, roofs, depths, corners, slots };
 }
