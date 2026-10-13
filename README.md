@@ -38,6 +38,9 @@ One-time setup on Windows 10 or 11:
    the app window stays blank, install the "Evergreen Bootstrapper" from
    https://developer.microsoft.com/microsoft-edge/webview2/.
 5. Close and reopen your terminal so it finds the new tools.
+6. Keep the project folder **outside OneDrive** (for example `C:\dev\instrumentum-urbis`).
+   The desktop build writes thousands of files into `src-tauri\target\` (over
+   1 GB), and OneDrive would try to upload them all and lock them while it does.
 
 Then, in the project folder:
 
