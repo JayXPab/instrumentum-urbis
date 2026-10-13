@@ -16,7 +16,8 @@
     </div>
     <div class="seg" role="group" aria-label="View">
       <button id="modeEdit" aria-pressed="true">Stage editor</button>
-      <button id="modeBuild" aria-pressed="false">Assembled building</button>
+      <button id="modeBuild" aria-pressed="false">Final Assembly</button>
+      <button id="modeExport" aria-pressed="false">Export</button>
     </div>
     <div class="topctl">
       <label for="mcVersion">Minecraft</label>
@@ -85,7 +86,7 @@
 
     <!-- ASSEMBLY: left -->
     <aside class="panel" id="leftBuild" hidden>
-      <div class="sec">
+      <div class="sec" id="comboSec">
         <h2>Combinations</h2>
         <div class="combo" id="comboN">0</div>
         <div class="formula" id="comboF"></div>
@@ -170,14 +171,6 @@
         </div>
       </div>
       <div class="sec">
-        <h2>Export this building</h2>
-        <div class="acts">
-          <button class="btn primary" id="dlSchem">Download .schem</button>
-          <button class="btn primary" id="dlBp">Download .bp (Axiom)</button>
-        </div>
-        <p class="lbl" id="schemInfo" style="margin:0"></p>
-      </div>
-      <div class="sec">
         <h2>Floor range</h2>
         <div class="row2">
           <div class="fld"><label for="fMin">Minimum</label><input type="number" id="fMin" min="3" max="200"></div>
@@ -198,6 +191,23 @@
         <p class="lbl" style="margin:0">Side and back walls for buildings that stand wall to wall. Each block is picked at random by weight.</p>
         <div id="pwRows" style="display:flex;flex-direction:column;gap:6px"></div>
         <button class="btn small" id="pwAdd" style="align-self:flex-start">Add block</button>
+      </div>
+      <div class="sec">
+        <h2>Display</h2>
+        <label class="chk"><input type="checkbox" id="optFade"> Fade repeated body floors</label>
+        <label class="chk"><input type="checkbox" id="optLabels"> Show floor labels</label>
+      </div>
+    </aside>
+
+    <!-- Export: the Combinations section moves in here when this step is open -->
+    <aside class="panel" id="leftExport" hidden>
+      <div class="sec">
+        <h2>Export this building</h2>
+        <div class="acts">
+          <button class="btn primary" id="dlSchem">Download .schem</button>
+          <button class="btn primary" id="dlBp">Download .bp (Axiom)</button>
+        </div>
+        <p class="lbl" id="schemInfo" style="margin:0"></p>
       </div>
       <div class="sec">
         <h2>Bulk export</h2>
@@ -224,11 +234,6 @@
         </div>
         <progress id="bulkProg" max="1" value="0" hidden style="width:100%"></progress>
         <p class="lbl" id="bulkInfo" style="margin:0" aria-live="polite"></p>
-      </div>
-      <div class="sec">
-        <h2>Display</h2>
-        <label class="chk"><input type="checkbox" id="optFade"> Fade repeated body floors</label>
-        <label class="chk"><input type="checkbox" id="optLabels"> Show floor labels</label>
       </div>
     </aside>
 

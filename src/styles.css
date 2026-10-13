@@ -39,7 +39,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .topctl label{color:var(--muted);font-size:12px}
 
 .work{flex:1;min-height:0;display:grid;grid-template-columns:290px minmax(0,1fr) 310px;gap:12px}
-.app[data-mode="build"] .work{grid-template-columns:290px minmax(0,1fr)}
+.app[data-mode="build"] .work,.app[data-mode="export"] .work{grid-template-columns:290px minmax(0,1fr)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:auto;min-width:0}
 .sec{padding:14px 14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
 .sec:last-child{border-bottom:0}
@@ -121,7 +121,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 @media (max-width:1000px){
   html,body{height:auto}
   .app{height:auto}
-  .work,.app[data-mode="build"] .work{grid-template-columns:minmax(0,1fr)}
+  .work,.app[data-mode="build"] .work,.app[data-mode="export"] .work{grid-template-columns:minmax(0,1fr)}
   .view{height:62vh;order:-1}
   .panel{overflow:visible}
 }

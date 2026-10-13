@@ -71,6 +71,20 @@ ported to Java for the mod, and the part the tests cover.
   recesses (windows, curtains, doors) behind it. +z points away from the
   building toward the street, which is south in Minecraft.
 
+## Editor steps
+
+The top bar has three steps:
+
+1. **Stage editor**: draw the base, body and capital variants block by block.
+2. **Final Assembly**: choose a building (variants, roof, floors, depth) and set
+   roofs, floor range, depth range, party walls and display options.
+3. **Export**: single-building downloads and bulk export. Future export
+   features go here.
+
+Final Assembly and Export show the same building in 3D. The Combinations section
+(with Random building) is one element that moves to the top of whichever of the
+two is open. "Fade repeated body floors" starts off.
+
 ## Design decisions
 
 - **Stages**: Base, Body, Capital. Each stage has any number of variants.
@@ -105,7 +119,7 @@ ported to Java for the mod, and the part the tests cover.
 ## Export
 
 - **.schem** is Sponge Schematic v3 (gzipped NBT), as WorldEdit 7.3+ reads it.
-  Download it from the Assembled building view.
+  Download it from the Export step.
 - Our axes match Minecraft: +x east, +y up, +z south. No rotation on export.
 - The **paste point** (where the player stands for `//paste`) is the bottom of
   the Core Wall's centre column: x = 0, y = 0, z = 0.

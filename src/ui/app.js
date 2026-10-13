@@ -47,7 +47,7 @@ upgradeProject(P);
 const ui = {
   mode: "edit", stage: "base", sel: { base: 0, body: 0, capital: 0 }, layer: 0,
   tool: "place", block: "minecraft:stone_bricks", facing: "north", half: "top", slabType: "top",
-  mirror: true, fade: true, labels: true, filter: "",
+  mirror: true, fade: false, labels: true, filter: "",
 };
 
 /* ---------- undo / redo (whole-project snapshots) ---------- */
@@ -642,7 +642,7 @@ function afterEdit() {
   renderChecks();
   render3D();
   renderGrid();
-  if (ui.mode === "build") renderBuildPanel();
+  if (ui.mode !== "edit") renderBuildPanel();
 }
 function afterStructural() {
   for (const k of STAGES) ui.sel[k] = clamp(ui.sel[k], 0, Math.max(0, P.stages[k].length - 1));
@@ -763,21 +763,28 @@ function setMode(m) {
   $("app").dataset.mode = m;
   $("modeEdit").setAttribute("aria-pressed", String(m === "edit"));
   $("modeBuild").setAttribute("aria-pressed", String(m === "build"));
+  $("modeExport").setAttribute("aria-pressed", String(m === "export"));
   $("leftEdit").hidden = m !== "edit";
   $("rightEdit").hidden = m !== "edit";
   $("leftBuild").hidden = m !== "build";
+  $("leftExport").hidden = m !== "export";
+  // Combinations and Random building show at the top of both Final Assembly and Export.
+  const panel = m === "export" ? $("leftExport") : $("leftBuild");
+  if ($("comboSec").parentElement !== panel) panel.prepend($("comboSec"));
   hover.visible = false;
   $("coord").textContent = "—";
-  if (m === "build") renderBuildPanel();
+  if (m !== "edit") renderBuildPanel();
   updateHint();
   render3D();
   requestAnimationFrame(() => { resize(); renderGrid(); fitView(); });
 }
 $("modeEdit").onclick = () => setMode("edit");
-$("modeBuild").onclick = () => {
+const toAssembled = (m) => () => {
   if (checks(P).some((c) => c[0] === "err")) toast("Fix the items under Checks to assemble a full building.");
-  setMode("build");
+  setMode(m);
 };
+$("modeBuild").onclick = toAssembled("build");
+$("modeExport").onclick = toAssembled("export");
 $("resetView").onclick = fitView;
 
 /* ---------- project drawer ---------- */
