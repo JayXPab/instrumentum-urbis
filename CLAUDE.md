@@ -226,8 +226,8 @@ need a bump.
 2. ✅ 3D viewer
 3. ✅ Stage editor (3D clicking + elevation grid, mirror, undo)
 4. ✅ Assembly (stacked floors, repeated floors marked, party walls)
-5. 🔶 Export: WorldEdit `.schem` ✅ and Axiom `.bp` ✅ (checked in game on
-   1.21.11). Litematica `.litematic` built (awaiting in-game check).
+5. ✅ Export: WorldEdit `.schem`, Axiom `.bp` and Litematica `.litematic`, all
+   checked in game on 1.21.11.
 6. ✅ Combination generator with bulk export (checked in game with Axiom)
 7. 🔶 Corners: sharp and chamfered, merge/trim, plot as deep as the mid-row
    buildings, L-shaped roofs that join the mid-row roofs: built (awaiting
