@@ -24,6 +24,7 @@ tauri = { version = "2.12.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 dirs = "7"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # Leave debugging details out of the libraries this app uses: they make the
 # compiler need much more memory and disk, and we never debug those libraries.

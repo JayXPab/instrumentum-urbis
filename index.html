@@ -40,6 +40,17 @@
         <button class="btn danger" id="resetSample">Reset to sample facade</button>
       </div>
     </div>
+    <!-- Desktop app only: shown when running in the Tauri window -->
+    <div class="sec" id="texSec" style="padding:12px 0 0;border:0;border-top:1px solid var(--line)" hidden>
+      <h2>Minecraft textures</h2>
+      <p class="lbl" style="margin:0">The editor can show blocks with their real textures, read from your own copy of Minecraft (the game jar every launcher keeps). Nothing is shipped with the app, and nothing leaves your computer.</p>
+      <p id="texStatus" style="margin:0"></p>
+      <div class="acts">
+        <button class="btn" id="texFind">Find Minecraft</button>
+        <button class="btn" id="texChoose">Choose game jar…</button>
+      </div>
+      <div id="texFound"></div>
+    </div>
   </section>
 
   <main class="work">
@@ -190,11 +201,7 @@
         </div>
         <label class="chk"><input type="checkbox" id="optMirror"> Mirror across the axis</label>
         <div class="current"><div class="sw" id="curSw"></div><div style="min-width:0"><b id="curName"></b><code id="curState"></code></div></div>
-        <div class="row2" id="stairOpts">
-          <div class="fld"><label for="facing">Stair facing</label><select id="facing"><option value="north">north (−z)</option><option value="south">south (+z)</option><option value="east">east (+x)</option><option value="west">west (−x)</option></select></div>
-          <div class="fld"><label for="half">Half</label><select id="half"><option value="bottom">bottom</option><option value="top">top (upside down)</option></select></div>
-        </div>
-        <div class="fld" id="slabOpts"><label for="slabType">Slab position</label><select id="slabType"><option value="bottom">bottom</option><option value="top">top</option><option value="double">double</option></select></div>
+        <div class="row2" id="propOpts"></div>
       </div>
       <div class="sec">
         <h2>Elevation layer <small id="layerInfo"></small></h2>

@@ -138,3 +138,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .found .fitem{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
 .found .fitem div{min-width:0}
 .found .fitem .btn{white-space:nowrap;flex:none}
+/* Palette swatch with the block's real texture (desktop app) */
+.sw.tex{image-rendering:pixelated;opacity:1!important}
+details.pgroup summary{cursor:pointer;list-style-position:inside;color:var(--muted)}
+details.pgroup summary h3{display:inline}
+details.pgroup[open] summary{margin-bottom:4px}

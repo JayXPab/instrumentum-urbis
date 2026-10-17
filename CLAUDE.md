@@ -67,6 +67,7 @@ src/main.js           entry point
 src/styles.css        styles (colour tokens on :root, dark mode via prefers-color-scheme)
 src/core/             the facade rules: NO DOM, NO three.js
   blocks.js           block catalogue, block-state parsing ("id[prop=value]")
+  blocklist.js        every block of each game version with its properties (generated)
   facade.js           coordinates, bounds, mirror rule, variants, validation
   assemble.js         stacking stages into a building, party walls, combination count
   sample.js           the sample facade the editor opens with
@@ -81,16 +82,24 @@ src/core/             the facade rules: NO DOM, NO three.js
   corner.js           corner buildings: turned side facade, merge/trim, chamfer
   colour.js           colour variants: white slot blocks, main and base colours
   import.js           reading .schem/.litematic/.bp; turning blocks into variants
+  models.js           Minecraft's blockstates/models: pick a model, follow parents,
+                      find textures, turn models into faces (editor drawing only;
+                      the mod won't need it)
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
-  meshes.js           block-state -> three.js meshes, guide lines, labels
-  desktop.js          desktop-only calls (folder picker, find/save files); folder settings
+  meshes.js           block-state -> three.js meshes (real models, or flat-colour
+                      boxes without game files), guide lines, labels
+  desktop.js          desktop-only calls (folder picker, find/save files, game files); folder settings
+  textures.js         block textures from the copied game files: swatches, texture
+                      pictures, block faces, average colours, caches
 src-tauri/             desktop app shell (Rust): window, settings, later file access
   tauri.conf.json     app name, window size, which commands build the editor
   src/lib.rs          the Rust program; registers plugins and commands
   src/folders.rs      finding mod folders in launchers; saving files into folders
+  src/assets.rs       finding the game jar; copying block textures/models out; reading them
   .cargo/config.toml  2 build jobs (the laptop ran out of memory)
   capabilities/       what the editor page is allowed to ask Rust to do
+scripts/make-blocklist.mjs  writes src/core/blocklist.js from minecraft-data
 vite.config.js        dev server on port 5173 (the desktop app expects it)
 tests/                tests for src/core (one file per area)
 docs/concept.pdf      original concept document
@@ -180,6 +189,21 @@ moves to the top of whichever left panel is open. A marker shows the paste point
     patch in its inner back corner. Chamfers clip roofs.
 - **Minecraft version** is chosen first; only Java 1.21.11 for now. Block names
   and states must come from the chosen version.
+- **Every block**: the palette has the hand-picked groups first, then "All
+  blocks" (every block of the version, A–Z by the game's order, closed until
+  opened or searched; swatches load as they scroll into view). The list and
+  each block's properties with defaults come from `blocklist.js`, generated
+  by `node scripts/make-blocklist.mjs <version>` from the open-source
+  minecraft-data project (MIT): the game keeps this list in its code, not its
+  files. Blocks sharing a game name (Torch / Wall Torch) are named after
+  their id. A shape (cube/stairs/slab/pane/carpet/plant/other) for drawing
+  without textures comes from the name and the default state's collision box.
+- **Block settings**: the current block gets one drop-down per property.
+  Choices are kept by property name, so a facing carries over between blocks.
+  Placed states store only what differs from the game's default, except stairs
+  (facing, half) and slabs (type), which always say; pane sides are left to
+  the exporter. Leaves are placed with `persistent=true` so they never decay.
+  `fullState` fills every other property from the list.
 - **Block states** are stored as strings like
   `minecraft:stone_brick_stairs[facing=north,half=top]`. Stair `facing` is the
   side the tall half is on.
@@ -279,6 +303,53 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   height" (trim/pad its other variants). Padding rows are Core Wall blocks.
 - Not supported: MCEdit `.schematic` (pre-1.13) and Structure Block `.nbt`.
 
+## Minecraft textures (desktop app)
+
+- Read from the user's own **game jar** (`<version>.jar`, a zip every launcher
+  keeps); never shipped. On launch, if the chosen version has no copied files
+  yet, the app looks for its jar once and copies from the first one found (a
+  message names the launcher). Project → Minecraft textures: **Find Minecraft** looks
+  for the jar of the chosen version in the official `.minecraft\versions`,
+  Modrinth `meta\versions`, CurseForge `Install\versions`, Prism/PolyMC
+  `libraries\com\mojang\minecraft`, ATLauncher and FTB; **Choose game jar…**
+  for anything else.
+- **Use** copies `assets/minecraft/` `textures/block`, `models/block`,
+  `blockstates` and `textures/colormap` into the app's local data folder
+  (`<AppData>\Local\io.github.jayxpab.instrumentumurbis\minecraft\<version>\`,
+  with `source.json` saying which jar). The jar is only read. After that the
+  app reads those copies (`read_asset`), so the jar may move or update freely.
+- A block's texture: blockstate → variant (stored properties must match;
+  missing ones match anything; the first of a random list) → model → parents
+  (child textures win, nearest elements win) → `#refs`. The palette swatch
+  draws the block's front: each element's north face in order (`frontLayers`),
+  so a grass block is its side plus the fringe; without elements it takes
+  `all`, `side`, `texture`, `cross`, `pane`, … in that order.
+- **Tints**: faces marked `tintindex` are coloured like the game does (grey
+  texture × colour, see-through kept). Grass and leaves use the **forest
+  biome** colours (`FOREST`: grass `#79c05a`, foliage `#59ae30`); birch
+  `#80a755`, spruce `#619961` and lily pad `#208030` are fixed. Which blocks
+  are tinted is a table (`TINTS` in models.js): the game decides this in code,
+  not in the jar's files.
+- Without copied files, or in the browser, blocks stay flat colours.
+- **3D view**: each block state is built once from its models
+  (`modelQuads`: elements, element rotation and rescale, face uv and rotation,
+  variant x/y turns, uvlock by projecting the turned face) into one shape
+  with a material per texture and tint, shared by every block of that state.
+  Faces are shaded like the game (top 1, north/south 0.8, east/west 0.6,
+  bottom 0.5; `shade: false` stays 1), unlit (`MeshBasicMaterial`). Textures
+  with fully clear pixels are cut out (leaves), partly clear ones blend
+  (stained glass). Blocks the game draws in code (chests, signs, banners,
+  beds, heads, water…) have no model shape: they stand in as a 14/16 box in
+  their particle texture. Until a state is built, or without game files, the
+  old flat-colour boxes are drawn; the view redraws as models arrive.
+- Panes are shown joined up (`connectPanes`) in the 3D view, as exported.
+  Fences and walls are not joined (they are stored and exported as placed).
+- The elevation grid uses each block's average texture colour when known.
+- Testing in a cloud session: Mojang's servers are blocked, but a copy of the
+  assets (InventivetalentDev/minecraft-assets on GitHub, branch per version)
+  can be cloned for local tests and served through a pretend
+  `__TAURI_INTERNALS__.invoke` in Playwright. Never commit those files.
+
 ## Project file
 
 The editor saves the project in the browser (localStorage key
@@ -310,21 +381,29 @@ need a bump.
 10. 🔶 Desktop app (Tauri). Web app frozen at tag `web-v1.0`. Steps:
     1. ✅ Tauri shell: the editor opens in its own window (`npm run desktop`),
        checked on the owner's Windows 10 laptop.
-    2. 🔶 Save to folders: a folder per format, Find mod folders across
-       launchers, bulk export as loose files. Built and tested in the Linux
-       app (awaiting a Windows check). Downloads already worked (Downloads).
-    3. ⬜ Find the user's Minecraft installation and read block textures from it
-       (the tool must not ship Mojang's assets).
-    4. ⬜ Draw blocks with textures, then with their real models.
+    2. ✅ Save to folders: a folder per format, Find game folders picks a
+       whole profile across launchers, bulk export as loose files (checked on
+       Windows with Modrinth).
+    3. 🔶 Game files: find the game jar across launchers (by itself on
+       launch), copy block textures/models/blockstates out once, palette and
+       current-block swatches show real textures; grass and leaves in forest
+       colours. Every block of the version in the palette, with a drop-down
+       per property. Built and tested in a browser with the real 1.21.11
+       assets (awaiting a Windows check).
+    4. 🔶 3D view draws blocks with their real models and textures (awaiting
+       a Windows check). Later: join fences and walls, real chests/signs.
     5. ⬜ Windows installer and app icon.
 11. ⬜ In-game mod (Fabric).
 
 ## Known limits
 
-- Blocks are drawn as flat colours, not textures. Stair, pane and plant shapes are simplified.
-- Blocks outside the catalogue (doors, shelves, lanterns… e.g. from imports) are
-  kept and exported exactly, but the 3D view shows them as magenta placeholder
-  cubes. To be fixed with real models in the desktop app (see roadmap 10).
+- Without game files (browser, or none found) blocks are drawn as flat
+  colours with simplified stair, pane and plant shapes, and colours for blocks
+  outside the hand-picked groups are guessed from their names.
+- Blocks the game version doesn't have (e.g. from imports of a newer version)
+  are kept and exported exactly, but drawn as magenta placeholder cubes.
+- Cloud sessions can't download Mojang's files (blocked), so texture tests use
+  a pretend jar with the same layout.
 - Testing the desktop app in a cloud session: `npx tauri build --debug --no-bundle`,
   then drive it with `tauri-driver` (cargo install) and `WebKitWebDriver`
   (apt `webkit2gtk-driver`) under `xvfb-run`; WebDriver on port 4444.

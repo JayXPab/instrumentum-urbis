@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BLOCKS, BMAP, MATERIALS, COLOURS, colourName, parseState, makeState, shortId, mirrorState } from "../core/blocks.js";
+import { BLOCKS, BMAP, BLOCK_PROPS, ALL_GROUP, MATERIALS, COLOURS, colourName, parseState, makeState, shortId, mirrorState, placeDefaults } from "../core/blocks.js";
 import { slotsIn, colourLists } from "../core/colour.js";
 import {
   STAGES, STAGE_NAMES, K, unK, uid, clamp, bounds, mirrorX, axisX,
@@ -21,7 +21,9 @@ import { ZipWriter } from "../core/zip.js";
 import { roofDefaults, SLOPED } from "../core/roof.js";
 import { typeList, TYPE_NAMES } from "../core/corner.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
-import { isDesktop, chooseFolder, findModFolders, saveFile, loadFolders, saveFolders } from "./desktop.js";
+import { isDesktop, chooseFolder, findModFolders, saveFile, loadFolders, saveFolders, findGameJars, extractAssets, chooseJar } from "./desktop.js";
+import { initTextures, reloadTextures, textureInfo, blockSwatch, swatchNow, onTexturesChange, colourNow } from "./textures.js";
+import { connectPanes } from "../core/schem.js";
 
 /* ============================================================
    STATE
@@ -51,8 +53,11 @@ upgradeProject(P);
 /** Editor-only state: never saved. */
 const ui = {
   mode: "edit", stage: "base", sel: { base: 0, body: 0, capital: 0 }, layer: 0,
-  tool: "place", block: "minecraft:stone_bricks", facing: "north", half: "top", slabType: "top",
-  mirror: true, fade: false, labels: true, filter: "",
+  tool: "place", block: "minecraft:stone_bricks",
+  // Chosen block properties by name, shared by every block that has them
+  // (a facing chosen for stairs carries over to doors).
+  props: { facing: "north", half: "top", type: "top" },
+  mirror: true, fade: false, labels: true, filter: "", allOpen: false,
 };
 
 /* ---------- undo / redo (whole-project snapshots) ---------- */
@@ -102,11 +107,23 @@ function inBounds(x, y, z) {
   const b = bounds(P);
   return x >= b.xMin && x <= b.xMax && z >= b.zMin && z <= b.zMax && y >= 0 && y < P.heights[ui.stage];
 }
+/** The properties a block is placed with: the chosen ones where they fit it, else the editor's defaults. */
+function chosenProps(id) {
+  const out = placeDefaults(id);
+  for (const p of BLOCK_PROPS[id] || []) if (p.values.includes(ui.props[p.name])) out[p.name] = ui.props[p.name];
+  return out;
+}
+/** Properties left out of the block list: panes get their sides when exported. */
+const hiddenProp = (b, name) => b.shape === "pane" && ["north", "south", "east", "west"].includes(name);
 function currentState() {
-  const b = BMAP[ui.block];
-  if (b.shape === "stairs") return makeState(b.id, { facing: ui.facing, half: ui.half });
-  if (b.shape === "slab") return makeState(b.id, { type: ui.slabType });
-  return b.id;
+  const b = BMAP[ui.block], chosen = chosenProps(b.id), props = {};
+  // Store what differs from the game's default; stairs and slabs always say
+  // which way up they are, as they always have.
+  for (const p of BLOCK_PROPS[b.id] || []) {
+    const keep = (b.shape === "stairs" && (p.name === "facing" || p.name === "half")) || (b.shape === "slab" && p.name === "type");
+    if (!hiddenProp(b, p.name) && (keep || chosen[p.name] !== p.values[0])) props[p.name] = chosen[p.name];
+  }
+  return makeState(b.id, props);
 }
 /** Applies one edit at (x,y,z), plus its mirror when mirroring is on. Returns true if anything changed. */
 function applyAt(x, y, z, tool) {
@@ -118,9 +135,7 @@ function applyAt(x, y, z, tool) {
     const { id, props } = parseState(s);
     if (!BMAP[id]) return false;
     ui.block = id;
-    if (props.facing) ui.facing = props.facing;
-    if (props.half) ui.half = props.half;
-    if (props.type) ui.slabType = props.type;
+    Object.assign(ui.props, placeDefaults(id), props);
     setTool("place");
     renderCurrent();
     renderPalette();
@@ -190,7 +205,11 @@ function render3D() {
   } else if (ui.mode === "edit") {
     const v = curVariant(), h = P.heights[ui.stage];
     $("viewtag").innerHTML = v ? `${STAGE_NAMES[ui.stage]} <small>${escapeHtml(v.name)}</small>` : STAGE_NAMES[ui.stage];
-    if (v) for (const [k, s] of Object.entries(v.blocks)) { const [x, y, z] = unK(k); world.add(blockObject(s, x, y, z)); }
+    // Panes are stored bare: show them joined up as they will be in game.
+    if (v) for (const [k, s] of connectPanes(new Map(Object.entries(v.blocks).map(([k, s]) => [k, { s }])))) {
+      const [x, y, z] = unK(k);
+      world.add(blockObject(s, x, y, z));
+    }
     // Stage bounds, Core Wall slab, mirror axis
     boxEdges(helpers, b.xMin - 0.5, 0, b.zMin - 0.5, b.xMax + 0.5, h, b.zMax + 0.5, muted, 0.45);
     boxEdges(helpers, b.xMin - 0.5, 0, -0.5, b.xMax + 0.5, h, 0.5, accent, 0.9);
@@ -219,10 +238,11 @@ function render3D() {
     const A = assemble(P);
     const lot = plot(P);
     $("viewtag").innerHTML = `${A.floors} floors <small>${lot.xMax - lot.xMin + 1} × ${A.top} × ${buildingDepth(P)}</small>`;
+    const joined = connectPanes(A.cells);
     for (const [k, c] of A.cells) {
       const [x, y, z] = unK(k);
       const faded = ui.fade && c.kind === "body" && c.copy > 0;
-      world.add(blockObject(c.s, x, y, z, faded ? 0.28 : 1));
+      world.add(blockObject(joined.get(k), x, y, z, faded ? 0.28 : 1));
     }
     if (ui.labels) {
       for (const s of A.segs) {
@@ -453,7 +473,7 @@ function renderGrid() {
       }
       const { id, props } = parseState(s);
       const bk = BMAP[id] || { color: "#d000d0", shape: "cube", opacity: 1 };
-      c.fillStyle = bk.color;
+      c.fillStyle = colourNow(id) || bk.color;
       c.globalAlpha = bk.opacity < 1 ? 0.65 : 1;
       if (bk.shape === "slab" && props.type !== "double") c.fillRect(X, props.type === "top" ? Y : Y + cell / 2, cell, cell / 2);
       else if (bk.shape === "stairs") {
@@ -539,41 +559,87 @@ function renderLayers() {
   }
   $("layerInfo").textContent = zLabel(ui.layer);
 }
+/** Paints a palette swatch with the block's real texture, once it's known. */
+function showSwatch(sw, id, still = () => true) {
+  // Animated textures are tall strips of frames: show the first, square, frame.
+  const paint = (u) => { if (u && still()) { sw.style.background = `url("${u}") top / 100% auto no-repeat`; sw.classList.add("tex"); } };
+  const now = swatchNow(id);
+  if (now !== undefined) paint(now);
+  else blockSwatch(id).then(paint);
+}
+/** Most blocks shown at once while filtering "All blocks". */
+const MAX_SHOWN = 300;
+/** Paints palette swatches once they scroll into view: only those blocks' files are read. */
+const swatchWatch = typeof IntersectionObserver === "function" ? new IntersectionObserver((es) => {
+  for (const e of es) if (e.isIntersecting) { swatchWatch.unobserve(e.target); showSwatch(e.target, e.target.dataset.id); }
+}, { rootMargin: "200px" }) : null;
+function paletteButton(b) {
+  const bt = document.createElement("button");
+  bt.dataset.id = b.id;
+  bt.setAttribute("aria-pressed", String(b.id === ui.block));
+  bt.title = b.id;
+  bt.innerHTML = `<span class="sw" style="background:${b.color};opacity:${b.opacity < 1 ? 0.7 : 1}"></span><span>${escapeHtml(b.name)}</span>`;
+  bt.firstChild.dataset.id = b.id;
+  if (swatchWatch) swatchWatch.observe(bt.firstChild);
+  else showSwatch(bt.firstChild, b.id);
+  return bt;
+}
 function renderPalette() {
-  const box = $("palette"), f = ui.filter.toLowerCase();
+  const box = $("palette"), f = ui.filter.toLowerCase().trim();
+  if (swatchWatch) swatchWatch.disconnect();
   box.innerHTML = "";
+  const match = (b) => !f || b.name.toLowerCase().includes(f) || b.id.includes(f);
   for (const g of [...new Set(BLOCKS.map((b) => b.group))]) {
-    const list = BLOCKS.filter((b) => b.group === g && (!f || b.name.toLowerCase().includes(f) || b.id.includes(f)));
+    const all = g === ALL_GROUP;
+    // While filtering, "All blocks" shows every match, including the hand-picked ones.
+    const list = BLOCKS.filter((b) => (all ? f || b.group === g : b.group === g) && match(b));
     if (!list.length) continue;
-    const sec = document.createElement("div");
+    const sec = document.createElement(all ? "details" : "div");
     sec.className = "pgroup";
-    sec.innerHTML = `<h3>${g}</h3>`;
+    if (all) {
+      sec.open = ui.allOpen || !!f;
+      sec.innerHTML = `<summary><h3>${f ? "All blocks matching" : "All blocks of Java " + escapeHtml(P.mcVersion)} (${list.length.toLocaleString()})</h3></summary>`;
+      sec.ontoggle = () => { if (!f) ui.allOpen = sec.open; };
+    } else sec.innerHTML = `<h3>${g}</h3>`;
     const gd = document.createElement("div");
     gd.className = "pgrid";
-    for (const b of list) {
-      const bt = document.createElement("button");
-      bt.setAttribute("aria-pressed", String(b.id === ui.block));
-      bt.title = b.id;
-      bt.innerHTML = `<span class="sw" style="background:${b.color};opacity:${b.opacity < 1 ? 0.7 : 1}"></span><span>${b.name}</span>`;
-      bt.onclick = () => { ui.block = b.id; if (ui.tool !== "place") setTool("place"); renderPalette(); renderCurrent(); };
-      gd.appendChild(bt);
-    }
+    for (const b of list.slice(0, MAX_SHOWN)) gd.appendChild(paletteButton(b));
     sec.appendChild(gd);
+    if (list.length > MAX_SHOWN) sec.insertAdjacentHTML("beforeend", `<p class="lbl" style="margin:4px 0 0">…and ${(list.length - MAX_SHOWN).toLocaleString()} more. Type more of the name to narrow it down.</p>`);
     box.appendChild(sec);
   }
   if (!box.children.length) box.innerHTML = `<p class="lbl">No blocks match “${escapeHtml(ui.filter)}”.</p>`;
 }
+$("palette").onclick = (e) => {
+  const bt = e.target.closest("button[data-id]");
+  if (!bt) return;
+  ui.block = bt.dataset.id;
+  if (ui.tool !== "place") setTool("place");
+  $("palette").querySelectorAll("button[aria-pressed=true]").forEach((x) => x.setAttribute("aria-pressed", "false"));
+  bt.setAttribute("aria-pressed", "true");
+  renderCurrent();
+};
+/** Which way each direction points in the editor. */
+const DIR_HINT = { north: "north (−z)", south: "south (+z, street)", east: "east (+x)", west: "west (−x)", up: "up", down: "down" };
 function renderCurrent() {
   const b = BMAP[ui.block];
   $("curSw").style.background = b.color;
+  $("curSw").classList.remove("tex");
+  showSwatch($("curSw"), b.id, () => ui.block === b.id);
   $("curName").textContent = b.name;
   $("curState").textContent = currentState();
-  $("stairOpts").hidden = b.shape !== "stairs";
-  $("slabOpts").hidden = b.shape !== "slab";
-  $("facing").value = ui.facing;
-  $("half").value = ui.half;
-  $("slabType").value = ui.slabType;
+  // One drop-down per property of the block.
+  const chosen = chosenProps(b.id);
+  $("propOpts").innerHTML = (BLOCK_PROPS[b.id] || []).filter((p) => !hiddenProp(b, p.name)).map((p) => `
+    <div class="fld"><label for="prop-${p.name}">${escapeHtml(p.name.replace(/_/g, " "))}</label>
+      <select id="prop-${p.name}" data-prop="${p.name}">${p.values.map((v) =>
+        `<option value="${v}"${v === chosen[p.name] ? " selected" : ""}>${escapeHtml(p.name === "facing" ? DIR_HINT[v] || v : v)}</option>`).join("")}</select></div>`).join("");
+  $("propOpts").hidden = !$("propOpts").children.length;
 }
+$("propOpts").onchange = (e) => {
+  const s = e.target.closest("select[data-prop]");
+  if (s) { ui.props[s.dataset.prop] = s.value; $("curState").textContent = currentState(); }
+};
 function setTool(t) {
   ui.tool = t;
   document.querySelectorAll("#tools button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
@@ -750,7 +816,70 @@ numInput("hBody", (n) => { P.heights.body = clamp(n, 2, 24); });
 numInput("hCap", (n) => { P.heights.capital = clamp(n, 1, 24); });
 $("coreBlock").innerHTML = BLOCKS.filter((b) => b.shape === "cube").map((b) => `<option value="${b.id}">${b.name}</option>`).join("");
 $("coreBlock").onchange = (e) => { P.coreBlock = e.target.value; save(); };
-$("mcVersion").onchange = (e) => { P.mcVersion = e.target.value; save(); };
+$("mcVersion").onchange = (e) => { P.mcVersion = e.target.value; save(); startTextures(); };
+
+/* ---------- Minecraft textures (desktop app) ---------- */
+// When more blocks can be drawn with their textures, draw them again.
+onTexturesChange(() => { render3D(); renderGrid(); });
+/** Versions we already looked for a game jar for by ourselves (once per launch each). */
+const autoTried = new Set();
+/** Checks this version's game files, then redraws what uses them. Without
+ * any yet, looks for the game jar once and copies from the first found. */
+async function startTextures() {
+  const info = await initTextures(P.mcVersion);
+  renderTextures();
+  renderPalette();
+  renderCurrent();
+  if (!isDesktop || info || autoTried.has(P.mcVersion)) return;
+  autoTried.add(P.mcVersion);
+  let found = [];
+  try { found = await findGameJars(P.mcVersion); } catch (e) { /* nothing found */ }
+  if (found.length) await useJar(found[0].path, found[0].launcher);
+}
+function renderTextures() {
+  $("texSec").hidden = !isDesktop;
+  if (!isDesktop) return;
+  const info = textureInfo();
+  $("texStatus").innerHTML = info
+    ? `Using textures from <span class="fpath">${escapeHtml(info.jar)}</span> (${info.files.toLocaleString()} files).`
+    : `No game files for Java ${escapeHtml(P.mcVersion)} yet, so blocks are drawn in flat colours. The app looks for Minecraft each time it starts; if it found nothing, start this version once in your launcher (it downloads the game jar), then use <b>Find Minecraft</b> or <b>Choose game jar…</b>.`;
+}
+/** Copies the files out of a game jar and starts using them. */
+async function useJar(jar, launcher) {
+  $("texFind").disabled = $("texChoose").disabled = true;
+  $("texStatus").textContent = "Reading the game jar… (a few seconds)";
+  try {
+    const info = await extractAssets(P.mcVersion, jar);
+    await reloadTextures();
+    toast(launcher
+      ? `Found Minecraft ${P.mcVersion} (${launcher}): blocks now use its textures`
+      : `Textures ready: ${info.files.toLocaleString()} files from the game jar`);
+  } catch (e) {
+    toast(String(e));
+  }
+  $("texFind").disabled = $("texChoose").disabled = false;
+  $("texFound").innerHTML = "";
+  renderTextures();
+  renderPalette();
+  renderCurrent();
+}
+let jars = [];
+$("texFind").onclick = async () => {
+  try { jars = await findGameJars(P.mcVersion); } catch (e) { jars = []; toast(String(e)); }
+  $("texFound").innerHTML = !jars.length
+    ? `<p class="lbl" style="margin:0">No game jar for Java ${escapeHtml(P.mcVersion)} found. Start this version once in your launcher (it downloads the jar), or use Choose game jar….</p>`
+    : `<div class="found">${jars.map((j, i) => `
+        <div class="fitem"><div><b>${escapeHtml(j.launcher)}</b><div class="fpath">${escapeHtml(j.path)}</div></div>
+          <button class="btn small" data-jar="${i}">${textureInfo()?.jar === j.path ? "Read again" : "Use"}</button></div>`).join("")}</div>`;
+};
+$("texFound").onclick = (e) => {
+  const b = e.target.closest("button[data-jar]");
+  if (b) useJar(jars[+b.dataset.jar].path);
+};
+$("texChoose").onclick = async () => {
+  const jar = await chooseJar();
+  if (jar) useJar(jar);
+};
 
 document.querySelectorAll(".stagetabs button").forEach((b) => (b.onclick = () => { ui.stage = b.dataset.stage; renderVariants(); render3D(); renderGrid(); fitView(); }));
 $("newVar").onclick = () => {
@@ -793,9 +922,6 @@ $("delVar").onclick = () => {
 
 document.querySelectorAll("#tools button").forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
 $("optMirror").onchange = (e) => { ui.mirror = e.target.checked; };
-$("facing").onchange = (e) => { ui.facing = e.target.value; renderCurrent(); };
-$("half").onchange = (e) => { ui.half = e.target.value; renderCurrent(); };
-$("slabType").onchange = (e) => { ui.slabType = e.target.value; renderCurrent(); };
 $("pSearch").addEventListener("input", (e) => { ui.filter = e.target.value; renderPalette(); });
 
 $("pickBase").onchange = (e) => { P.assembly.base = +e.target.value; save(); render3D(); };
@@ -1608,9 +1734,9 @@ document.addEventListener("keydown", (e) => {
   else if (k === "m") { ui.mirror = !ui.mirror; $("optMirror").checked = ui.mirror; toast("Mirror " + (ui.mirror ? "on" : "off")); }
   else if (k === "r") {
     const o = ["north", "east", "south", "west"];
-    ui.facing = o[(o.indexOf(ui.facing) + 1) % 4];
+    ui.props.facing = o[(o.indexOf(ui.props.facing) + 1) % 4];
     renderCurrent();
-    toast("Stairs face " + ui.facing);
+    toast("Facing " + ui.props.facing);
   }
 });
 
@@ -1624,4 +1750,5 @@ export function start() {
   resize(); syncInputs(); renderLayers(); renderPalette(); renderCurrent(); setTool("place");
   renderVariants(); renderChecks(); renderBuildPanel(); render3D(); renderGrid(); fitView();
   renderFolders();
+  startTextures();
 }
