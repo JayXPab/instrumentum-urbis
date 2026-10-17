@@ -106,6 +106,10 @@ test("grass and leaves get the forest colours; other blocks none", () => {
   assert.equal(tintOf("minecraft:birch_leaves"), "#80a755"); // fixed in every biome
   assert.equal(tintOf("minecraft:bricks"), null);
   assert.equal(tintOf("minecraft:cherry_leaves"), null); // already coloured in its texture
+  assert.equal(tintOf("minecraft:pale_oak_leaves"), null);
+  assert.equal(tintOf("minecraft:wildflowers"), "#79c05a"); // stems only (1.21.5+)
+  assert.equal(tintOf("minecraft:pink_petals"), "#79c05a");
+  assert.equal(tintOf("minecraft:leaf_litter"), "#a36d46"); // dry foliage colour map
 });
 
 test("front layers: a grass block is its side plus the tinted fringe; only marked faces are tinted", () => {

@@ -124,16 +124,21 @@ export function swatchTexture(textures) {
 // leaves by biome, a few blocks by a fixed colour. The editor uses the forest
 // biome's colours. Only model faces marked with a "tintindex" are coloured.
 
-/** Grass and leaf colours in the forest biome (the game's colour maps at temperature 0.7, downfall 0.8). */
-export const FOREST = { grass: "#79c05a", foliage: "#59ae30" };
+/**
+ * Grass, leaf and leaf-litter colours in the forest biome (the game's colour
+ * maps at temperature 0.7, downfall 0.8; checked against the 1.21.11 jar).
+ */
+export const FOREST = { grass: "#79c05a", foliage: "#59ae30", dryFoliage: "#a36d46" };
 
 /** Block id (without "minecraft:") -> the colour its marked faces get. */
 const TINTS = {
   grass_block: FOREST.grass, short_grass: FOREST.grass, tall_grass: FOREST.grass,
   fern: FOREST.grass, large_fern: FOREST.grass, potted_fern: FOREST.grass,
   sugar_cane: FOREST.grass, bush: FOREST.grass,
+  pink_petals: FOREST.grass, wildflowers: FOREST.grass, // their stems; the petals aren't marked
   oak_leaves: FOREST.foliage, jungle_leaves: FOREST.foliage, acacia_leaves: FOREST.foliage,
   dark_oak_leaves: FOREST.foliage, mangrove_leaves: FOREST.foliage, vine: FOREST.foliage,
+  leaf_litter: FOREST.dryFoliage,
   // Fixed colours, the same in every biome.
   birch_leaves: "#80a755", spruce_leaves: "#619961", lily_pad: "#208030",
   // Water's usual colour (most biomes).

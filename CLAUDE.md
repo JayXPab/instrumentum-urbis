@@ -326,7 +326,11 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   `all`, `side`, `texture`, `cross`, `pane`, … in that order.
 - **Tints**: faces marked `tintindex` are coloured like the game does (grey
   texture × colour, see-through kept). Grass and leaves use the **forest
-  biome** colours (`FOREST`: grass `#79c05a`, foliage `#59ae30`); birch
+  biome** colours (`FOREST`: grass `#79c05a`, foliage `#59ae30`, leaf litter
+  `#a36d46` from the dry foliage map; pink petal and wildflower stems use
+  grass). Checked against the real 1.21.11 jar's colour maps and models;
+  cherry and pale oak leaves, bamboo and the stonecutter have marked
+  faces the game leaves uncoloured. Birch
   `#80a755`, spruce `#619961` and lily pad `#208030` are fixed. Which blocks
   are tinted is a table (`TINTS` in models.js): the game decides this in code,
   not in the jar's files.
