@@ -1,6 +1,6 @@
 {
   "name": "instrumentum-urbis",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Bulk generator of unique Minecraft building facades for city building.",
   "private": true,
   "type": "module",

@@ -41,8 +41,14 @@ browser cannot do (reading the Minecraft installation, saving into folders).
 use is no longer a goal.
 
 Releases: **Desktop Beta v1.0.0** is git tag **`app-v1.0.0`** (roadmap steps
-1–10.4, after the Step 10 branches were merged and cleaned up). The version
-in `package.json`, `tauri.conf.json` and `Cargo.toml` still says 0.1.0.
+1–10.4, after the Step 10 branches were merged and cleaned up). The app's
+version (`package.json`, `tauri.conf.json`, `Cargo.toml`) is 1.0.0 from then on.
+
+## Dev logs
+
+The concept doc ends with dated dev logs of new ideas. A newer dev log
+supersedes older ones and its ideas come first, unless an older idea is
+essential to building a newer one.
 
 The owner uses Windows 10 (laptop) and Windows 11 (desktop), so the desktop app
 targets Windows first. Claude's cloud sessions run Linux: they can compile the
