@@ -27,13 +27,25 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Jay",
+    "category": "Utility",
+    "shortDescription": "Bulk generator of unique Minecraft building facades",
+    "longDescription": "Draw Minecraft building facades stage by stage and export thousands of unique buildings as .schem, .bp and .litematic files.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "startMenuFolder": "Instrumentum Urbis"
+      }
+    }
   }
 }

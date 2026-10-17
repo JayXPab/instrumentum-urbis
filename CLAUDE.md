@@ -23,7 +23,7 @@ npm run dev      # start the editor at http://localhost:5173
 npm test         # run the core tests
 npm run build    # production build into dist/
 npm run desktop        # open the desktop app (Tauri) with live reload
-npm run desktop:build  # build the Windows installer into src-tauri/target/release/bundle/
+npm run desktop:build  # build the Windows installer into src-tauri/target/release/bundle/nsis/
 ```
 
 The desktop commands need Rust and, on Windows, the Microsoft C++ Build Tools
@@ -39,6 +39,9 @@ app: same editor, run inside a Tauri window, and it may gain features the
 browser cannot do (reading the Minecraft installation, saving into folders).
 `npm run dev` still opens it in a browser for quick testing, but browser-only
 use is no longer a goal.
+
+Pushing a tag `app-v<version>` makes GitHub Actions build the Windows
+installer and attach it to a GitHub release of that name.
 
 Releases: **Desktop Beta v1.0.0** is git tag **`app-v1.0.0`** (roadmap steps
 1–10.4, after the Step 10 branches were merged and cleaned up). The app's
@@ -110,6 +113,8 @@ src-tauri/             desktop app shell (Rust): window, settings, later file ac
   .cargo/config.toml  2 build jobs (the laptop ran out of memory)
   capabilities/       what the editor page is allowed to ask Rust to do
 scripts/make-blocklist.mjs  writes src/core/blocklist.js from minecraft-data
+scripts/make-icon.py  draws the placeholder app icon (src-tauri/icons/source-1024.png)
+.github/workflows/windows-installer.yml  builds the Windows installer on GitHub
 vite.config.js        dev server on port 5173 (the desktop app expects it)
 tests/                tests for src/core (one file per area)
 docs/concept.pdf      original concept document
@@ -398,15 +403,17 @@ need a bump.
     2. ✅ Save to folders: a folder per format, Find game folders picks a
        whole profile across launchers, bulk export as loose files (checked on
        Windows with Modrinth).
-    3. 🔶 Game files: find the game jar across launchers (by itself on
+    3. ✅ Game files: find the game jar across launchers (by itself on
        launch), copy block textures/models/blockstates out once, palette and
        current-block swatches show real textures; grass and leaves in forest
        colours. Every block of the version in the palette, with a drop-down
-       per property. Built and tested in a browser with the real 1.21.11
-       assets (awaiting a Windows check).
-    4. 🔶 3D view draws blocks with their real models and textures (awaiting
-       a Windows check). Later: join fences and walls, real chests/signs.
-    5. ⬜ Windows installer and app icon.
+       per property (checked on Windows).
+    4. ✅ 3D view draws blocks with their real models and textures (checked
+       on Windows). Later: join fences and walls, real chests/signs.
+    5. 🔶 Windows installer and app icon: one per-user NSIS installer (no
+       admin rights, Start menu entry, uninstaller) built by GitHub Actions;
+       placeholder pixel-art townhouse icon until the owner's own artwork
+       (awaiting a Windows check).
 11. ⬜ Start menu and projects (Dev Log 2). On launch: recent projects, New
     Project, Open. New Project asks for the Minecraft version, the project's
     name and where to save it (more settings to be decided). Projects become
@@ -439,7 +446,7 @@ need a bump.
   (apt `webkit2gtk-driver`) under `xvfb-run`; WebDriver on port 4444.
 - `npm run desktop` (dev) and the installed app have separate storage (different
   page origins), so a project saved in one isn't in the other. Copy it across
-  with Project → JSON until this is handled (roadmap 10.5).
+  with Project → JSON until projects become files on disk (roadmap 11).
 - Testing: the `editor-scratch` launch config runs a second dev server on port 5174.
   It has its own browser storage, so tests there never touch the owner's project.
 - Stair shapes (inner/outer corners) are not worked out on export; stairs export

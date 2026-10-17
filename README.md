@@ -57,8 +57,23 @@ If a build stops with "memory allocation failed" or "invalid metadata files",
 delete the folder `src-tauri\target` (a crashed build leaves broken files
 there), close other programs, and run `npm run desktop` again.
 
-To build an installer: `npm run desktop:build`. The installers land in
-`src-tauri\target\release\bundle\` (`msi\` and `nsis\`).
+## Installing the app
+
+The easy way: download `Instrumentum Urbis_<version>_x64-setup.exe` from the
+repository's **Releases** page on GitHub and run it. It installs just for you
+(no administrator rights), adds a Start menu entry, and can be removed from
+Windows' "Installed apps" like any other program.
+
+The installer isn't signed yet, so the first time Windows shows "Windows
+protected your PC". Click **More info**, then **Run anyway**.
+
+GitHub builds the installer on its own Windows machines (the "Windows
+installer" job on the Actions tab) whenever a release tag like `app-v1.1.0`
+is pushed. To build one yourself instead: `npm run desktop:build`. It lands in
+`src-tauri\target\release\bundle\nsis\`.
+
+The app icon is a placeholder. To replace it, save a square 1024 px PNG and
+run `npx tauri icon <your picture>.png`, which makes every size Windows needs.
 
 ## Using the editor
 
