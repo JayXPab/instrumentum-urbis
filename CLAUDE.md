@@ -286,7 +286,9 @@ moves to the top of whichever left panel is open. A marker shows the paste point
 ## Minecraft textures (desktop app)
 
 - Read from the user's own **game jar** (`<version>.jar`, a zip every launcher
-  keeps); never shipped. Project → Minecraft textures: **Find Minecraft** looks
+  keeps); never shipped. On launch, if the chosen version has no copied files
+  yet, the app looks for its jar once and copies from the first one found (a
+  message names the launcher). Project → Minecraft textures: **Find Minecraft** looks
   for the jar of the chosen version in the official `.minecraft\versions`,
   Modrinth `meta\versions`, CurseForge `Install\versions`, Prism/PolyMC
   `libraries\com\mojang\minecraft`, ATLauncher and FTB; **Choose game jar…**

@@ -765,12 +765,20 @@ $("coreBlock").onchange = (e) => { P.coreBlock = e.target.value; save(); };
 $("mcVersion").onchange = (e) => { P.mcVersion = e.target.value; save(); startTextures(); };
 
 /* ---------- Minecraft textures (desktop app) ---------- */
-/** Checks this version's game files, then redraws what uses them. */
+/** Versions we already looked for a game jar for by ourselves (once per launch each). */
+const autoTried = new Set();
+/** Checks this version's game files, then redraws what uses them. Without
+ * any yet, looks for the game jar once and copies from the first found. */
 async function startTextures() {
-  await initTextures(P.mcVersion);
+  const info = await initTextures(P.mcVersion);
   renderTextures();
   renderPalette();
   renderCurrent();
+  if (!isDesktop || info || autoTried.has(P.mcVersion)) return;
+  autoTried.add(P.mcVersion);
+  let found = [];
+  try { found = await findGameJars(P.mcVersion); } catch (e) { /* nothing found */ }
+  if (found.length) await useJar(found[0].path, found[0].launcher);
 }
 function renderTextures() {
   $("texSec").hidden = !isDesktop;
@@ -778,16 +786,18 @@ function renderTextures() {
   const info = textureInfo();
   $("texStatus").innerHTML = info
     ? `Using textures from <span class="fpath">${escapeHtml(info.jar)}</span> (${info.files.toLocaleString()} files).`
-    : `No game files for Java ${escapeHtml(P.mcVersion)} yet, so blocks are drawn in flat colours. Use <b>Find Minecraft</b>, then pick one.`;
+    : `No game files for Java ${escapeHtml(P.mcVersion)} yet, so blocks are drawn in flat colours. The app looks for Minecraft each time it starts; if it found nothing, start this version once in your launcher (it downloads the game jar), then use <b>Find Minecraft</b> or <b>Choose game jar…</b>.`;
 }
 /** Copies the files out of a game jar and starts using them. */
-async function useJar(jar) {
+async function useJar(jar, launcher) {
   $("texFind").disabled = $("texChoose").disabled = true;
   $("texStatus").textContent = "Reading the game jar… (a few seconds)";
   try {
     const info = await extractAssets(P.mcVersion, jar);
     await reloadTextures();
-    toast(`Textures ready: ${info.files.toLocaleString()} files from the game jar`);
+    toast(launcher
+      ? `Found Minecraft ${P.mcVersion} (${launcher}): blocks now use its textures`
+      : `Textures ready: ${info.files.toLocaleString()} files from the game jar`);
   } catch (e) {
     toast(String(e));
   }
