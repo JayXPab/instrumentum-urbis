@@ -40,6 +40,10 @@ browser cannot do (reading the Minecraft installation, saving into folders).
 `npm run dev` still opens it in a browser for quick testing, but browser-only
 use is no longer a goal.
 
+Releases: **Desktop Beta v1.0.0** is git tag **`app-v1.0.0`** (roadmap steps
+1–10.4, after the Step 10 branches were merged and cleaned up). The version
+in `package.json`, `tauri.conf.json` and `Cargo.toml` still says 0.1.0.
+
 The owner uses Windows 10 (laptop) and Windows 11 (desktop), so the desktop app
 targets Windows first. Claude's cloud sessions run Linux: they can compile the
 app and take screenshots of it, but every desktop step must be tried on Windows.
@@ -397,7 +401,23 @@ need a bump.
     4. 🔶 3D view draws blocks with their real models and textures (awaiting
        a Windows check). Later: join fences and walls, real chests/signs.
     5. ⬜ Windows installer and app icon.
-11. ⬜ In-game mod (Fabric).
+11. ⬜ Start menu and projects (Dev Log 2). On launch: recent projects, New
+    Project, Open. New Project asks for the Minecraft version, the project's
+    name and where to save it (more settings to be decided). Projects become
+    files on disk, which also ends the separate dev/installed storage. Later:
+    our own file format holding the Core Wall definitions and generation
+    settings (Dev Log 1).
+12. ⬜ Menu bar and settings (Dev Log 2): File, Settings and Help menus along
+    the top, like most programs. A settings window with key bindings and
+    advanced options.
+13. ⬜ UI overhaul (Dev Log 2), led by the owner's artistic direction: the
+    elegance, ornament and class of Civilization V with the clean,
+    professional look of Photoshop.
+14. ⬜ Wiki: a guide for new users covering every feature (Dev Log 2).
+15. ⬜ Pro features (Dev Log 2): some "pro only" features for Patreon
+    supporters, an unintrusive way to fund the app and later the mod. Work
+    out how unlocking them would work first.
+16. ⬜ In-game mod (Fabric).
 
 ## Known limits
 
