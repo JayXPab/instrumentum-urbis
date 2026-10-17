@@ -397,7 +397,7 @@ need a bump.
    gradient bands (checked in game). Later: dormers, hipped mid-row roofs.
 9. ✅ Schematic import: .schem/.litematic/.bp, Core Wall and edges, whole facade
    or one stage, recentred to x = 0 (checked in game).
-10. 🔶 Desktop app (Tauri). Web app frozen at tag `web-v1.0`. Steps:
+10. ✅ Desktop app (Tauri). Web app frozen at tag `web-v1.0`. Steps:
     1. ✅ Tauri shell: the editor opens in its own window (`npm run desktop`),
        checked on the owner's Windows 10 laptop.
     2. ✅ Save to folders: a folder per format, Find game folders picks a
@@ -410,10 +410,10 @@ need a bump.
        per property (checked on Windows).
     4. ✅ 3D view draws blocks with their real models and textures (checked
        on Windows). Later: join fences and walls, real chests/signs.
-    5. 🔶 Windows installer and app icon: one per-user NSIS installer (no
+    5. ✅ Windows installer and app icon: one per-user NSIS installer (no
        admin rights, Start menu entry, uninstaller) built by GitHub Actions;
        placeholder pixel-art townhouse icon until the owner's own artwork
-       (awaiting a Windows check).
+       (install and uninstall checked on Windows).
 11. ⬜ Start menu and projects (Dev Log 2). On launch: recent projects, New
     Project, Open. New Project asks for the Minecraft version, the project's
     name and where to save it (more settings to be decided). Projects become
