@@ -4,7 +4,9 @@
 // Colours are flat approximations used only for the editor preview;
 // they are not Minecraft textures.
 
-/** @typedef {{group:string, id:string, name:string, color:string, shape:"cube"|"stairs"|"slab"|"pane"|"plant"|"carpet", opacity:number}} BlockDef */
+import { BLOCK_LISTS } from "./blocklist.js";
+
+/** @typedef {{group:string, id:string, name:string, color:string, shape:"cube"|"stairs"|"slab"|"pane"|"plant"|"carpet"|"other", opacity:number}} BlockDef */
 
 /** @type {BlockDef[]} */
 export const BLOCKS = [
@@ -114,8 +116,60 @@ const known = new Set(BLOCKS.map((b) => b.id));
 for (const [fam, famName, col, shape] of COLOUR_FAMILIES)
   for (const c of COLOURS) {
     const id = `minecraft:${c}_${fam}`;
-    if (!known.has(id)) BLOCKS.push({ group: "Colours", id, name: colourName(c) + " " + famName, color: col(c), shape, opacity: 1 });
+    if (known.has(id)) continue;
+    known.add(id);
+    BLOCKS.push({ group: "Colours", id, name: colourName(c) + " " + famName, color: col(c), shape, opacity: 1 });
   }
+
+/* ---------- every block of the game ---------- */
+// The hand-picked blocks above come first, in their groups. Every other block
+// of the game version follows in the group "All blocks", with its properties
+// from blocklist.js. Only Java 1.21.11 for now.
+export const GAME_VERSION = "1.21.11";
+export const ALL_GROUP = "All blocks";
+
+/**
+ * Each block's properties: id -> [{ name, values }], the default value first.
+ * @type {Record<string, {name:string, values:string[]}[]>}
+ */
+export const BLOCK_PROPS = {};
+/** Preview colours guessed from a block's name, for drawing without textures. */
+const NAME_COLOURS = [
+  [/pale_oak/, "#d8d0cc"], [/dark_oak/, "#46301a"], [/spruce/, "#735632"], [/birch/, "#c5b47b"], [/jungle/, "#a0734f"],
+  [/acacia/, "#a85a32"], [/mangrove/, "#763631"], [/cherry/, "#e2b2ad"], [/bamboo/, "#c4b058"], [/crimson/, "#6a344b"],
+  [/warped/, "#2b6963"], [/oak/, "#a3844f"], [/oxidized/, "#55a18c"], [/weathered/, "#6c9f6d"], [/exposed/, "#a17e68"],
+  [/copper/, "#c06d50"], [/deepslate/, "#4a4a4d"], [/blackstone/, "#38323b"], [/red_sandstone|red_sand/, "#b5622a"],
+  [/sandstone|sand/, "#dcd2a3"], [/quartz/, "#ebe5dd"], [/prismarine/, "#5fa59a"], [/nether_brick/, "#2e1619"],
+  [/purpur/, "#a97ba9"], [/end_stone/, "#dbdea1"], [/mud/, "#8a6a50"], [/tuff/, "#6c6d66"], [/brick/, "#94604f"],
+  [/glass/, "#c3e2ea"], [/ice/, "#91b6f4"], [/leaves|vine|grass|fern|moss/, "#5d8c3a"], [/gold/, "#f6d03d"],
+  [/iron/, "#d8d8d8"], [/diamond/, "#62dbd5"], [/emerald/, "#2ad063"], [/lapis/, "#1e4590"], [/redstone/, "#a01208"],
+  [/granite/, "#986b56"], [/diorite/, "#bebebe"], [/andesite/, "#878a88"], [/dirt|podzol|farmland/, "#8a6043"],
+];
+function guessColour(name) {
+  const c = COLOURS.find((c) => name.startsWith(c + "_"));
+  if (c) return WOOL[c];
+  return NAME_COLOURS.find(([re]) => re.test(name))?.[1] || "#8f8f8f";
+}
+for (const line of BLOCK_LISTS[GAME_VERSION].split("\n")) {
+  const [name, display, shape, props] = line.split("|");
+  const id = "minecraft:" + name;
+  BLOCK_PROPS[id] = props ? props.split(";").map((p) => { const [n, v] = p.split(":"); return { name: n, values: v.split(",") }; }) : [];
+  if (known.has(id)) continue;
+  const see = /glass|ice$/.test(name) && !/tinted/.test(name);
+  BLOCKS.push({ group: ALL_GROUP, id, name: display, color: guessColour(name), shape, opacity: see ? 0.5 : 1 });
+}
+
+/**
+ * The properties the editor places a block with when the user hasn't chosen:
+ * the game's defaults, except that leaves are placed so they never decay.
+ * @param {string} id
+ * @returns {Record<string,string>}
+ */
+export function placeDefaults(id) {
+  const out = {};
+  for (const p of BLOCK_PROPS[id] || []) out[p.name] = p.name === "persistent" ? "true" : p.values[0];
+  return out;
+}
 
 const SLOT = new RegExp(`^minecraft:white_(${COLOUR_FAMILIES.map(([f]) => f).join("|")})$`);
 /** Is this block a colour slot (a white wool, terracotta, concrete, concrete powder or carpet)? */
@@ -177,32 +231,17 @@ export function makeState(id, props) {
 
 export const shortId = (/** @type {string} */ id) => id.replace("minecraft:", "");
 
-/** Minecraft's default value for each property the editor may leave out, by shape. */
-const SHAPE_DEFAULTS = {
-  stairs: { facing: "north", half: "bottom", shape: "straight", waterlogged: "false" },
-  slab: { type: "bottom", waterlogged: "false" },
-  pane: { north: "false", south: "false", east: "false", west: "false", waterlogged: "false" },
-  cube: {},
-  plant: {},
-  carpet: {},
-};
-/** Blocks whose properties differ from the rest of their shape. */
-const ID_DEFAULTS = {
-  "minecraft:quartz_pillar": { axis: "y" },
-  "minecraft:grass_block": { snowy: "false" },
-  "minecraft:tall_grass": { half: "lower" },
-};
-
 /**
- * Fills in every property Minecraft expects, keeping the ones already set.
- * Blocks not in the catalogue are returned unchanged.
+ * Fills in every property Minecraft expects (its defaults), keeping the ones
+ * already set. Blocks the game version doesn't have are returned unchanged.
  */
 export function fullState(s) {
   const { id, props } = parseState(s);
-  const d = BMAP[id];
-  if (!d) return s;
-  const all = { ...SHAPE_DEFAULTS[d.shape], ...ID_DEFAULTS[id], ...props };
-  return makeState(id, all);
+  const list = BLOCK_PROPS[id];
+  if (!list) return s;
+  const all = {};
+  for (const p of list) all[p.name] = props[p.name] ?? p.values[0];
+  return makeState(id, { ...all, ...props });
 }
 
 /** Mirrors a block state across the x axis: east <-> west, and stair corner shapes left <-> right. */

@@ -67,6 +67,7 @@ src/main.js           entry point
 src/styles.css        styles (colour tokens on :root, dark mode via prefers-color-scheme)
 src/core/             the facade rules: NO DOM, NO three.js
   blocks.js           block catalogue, block-state parsing ("id[prop=value]")
+  blocklist.js        every block of each game version with its properties (generated)
   facade.js           coordinates, bounds, mirror rule, variants, validation
   assemble.js         stacking stages into a building, party walls, combination count
   sample.js           the sample facade the editor opens with
@@ -95,6 +96,7 @@ src-tauri/             desktop app shell (Rust): window, settings, later file ac
   src/assets.rs       finding the game jar; copying block textures/models out; reading them
   .cargo/config.toml  2 build jobs (the laptop ran out of memory)
   capabilities/       what the editor page is allowed to ask Rust to do
+scripts/make-blocklist.mjs  writes src/core/blocklist.js from minecraft-data
 vite.config.js        dev server on port 5173 (the desktop app expects it)
 tests/                tests for src/core (one file per area)
 docs/concept.pdf      original concept document
@@ -184,6 +186,21 @@ moves to the top of whichever left panel is open. A marker shows the paste point
     patch in its inner back corner. Chamfers clip roofs.
 - **Minecraft version** is chosen first; only Java 1.21.11 for now. Block names
   and states must come from the chosen version.
+- **Every block**: the palette has the hand-picked groups first, then "All
+  blocks" (every block of the version, A–Z by the game's order, closed until
+  opened or searched; swatches load as they scroll into view). The list and
+  each block's properties with defaults come from `blocklist.js`, generated
+  by `node scripts/make-blocklist.mjs <version>` from the open-source
+  minecraft-data project (MIT): the game keeps this list in its code, not its
+  files. Blocks sharing a game name (Torch / Wall Torch) are named after
+  their id. A shape (cube/stairs/slab/pane/carpet/plant/other) for drawing
+  without textures comes from the name and the default state's collision box.
+- **Block settings**: the current block gets one drop-down per property.
+  Choices are kept by property name, so a facing carries over between blocks.
+  Placed states store only what differs from the game's default, except stairs
+  (facing, half) and slabs (type), which always say; pane sides are left to
+  the exporter. Leaves are placed with `persistent=true` so they never decay.
+  `fullState` fills every other property from the list.
 - **Block states** are stored as strings like
   `minecraft:stone_brick_stairs[facing=north,half=top]`. Stair `facing` is the
   side the tall half is on.

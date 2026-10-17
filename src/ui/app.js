@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BLOCKS, BMAP, MATERIALS, COLOURS, colourName, parseState, makeState, shortId, mirrorState } from "../core/blocks.js";
+import { BLOCKS, BMAP, BLOCK_PROPS, ALL_GROUP, MATERIALS, COLOURS, colourName, parseState, makeState, shortId, mirrorState, placeDefaults } from "../core/blocks.js";
 import { slotsIn, colourLists } from "../core/colour.js";
 import {
   STAGES, STAGE_NAMES, K, unK, uid, clamp, bounds, mirrorX, axisX,
@@ -52,8 +52,11 @@ upgradeProject(P);
 /** Editor-only state: never saved. */
 const ui = {
   mode: "edit", stage: "base", sel: { base: 0, body: 0, capital: 0 }, layer: 0,
-  tool: "place", block: "minecraft:stone_bricks", facing: "north", half: "top", slabType: "top",
-  mirror: true, fade: false, labels: true, filter: "",
+  tool: "place", block: "minecraft:stone_bricks",
+  // Chosen block properties by name, shared by every block that has them
+  // (a facing chosen for stairs carries over to doors).
+  props: { facing: "north", half: "top", type: "top" },
+  mirror: true, fade: false, labels: true, filter: "", allOpen: false,
 };
 
 /* ---------- undo / redo (whole-project snapshots) ---------- */
@@ -103,11 +106,23 @@ function inBounds(x, y, z) {
   const b = bounds(P);
   return x >= b.xMin && x <= b.xMax && z >= b.zMin && z <= b.zMax && y >= 0 && y < P.heights[ui.stage];
 }
+/** The properties a block is placed with: the chosen ones where they fit it, else the editor's defaults. */
+function chosenProps(id) {
+  const out = placeDefaults(id);
+  for (const p of BLOCK_PROPS[id] || []) if (p.values.includes(ui.props[p.name])) out[p.name] = ui.props[p.name];
+  return out;
+}
+/** Properties left out of the block list: panes get their sides when exported. */
+const hiddenProp = (b, name) => b.shape === "pane" && ["north", "south", "east", "west"].includes(name);
 function currentState() {
-  const b = BMAP[ui.block];
-  if (b.shape === "stairs") return makeState(b.id, { facing: ui.facing, half: ui.half });
-  if (b.shape === "slab") return makeState(b.id, { type: ui.slabType });
-  return b.id;
+  const b = BMAP[ui.block], chosen = chosenProps(b.id), props = {};
+  // Store what differs from the game's default; stairs and slabs always say
+  // which way up they are, as they always have.
+  for (const p of BLOCK_PROPS[b.id] || []) {
+    const keep = (b.shape === "stairs" && (p.name === "facing" || p.name === "half")) || (b.shape === "slab" && p.name === "type");
+    if (!hiddenProp(b, p.name) && (keep || chosen[p.name] !== p.values[0])) props[p.name] = chosen[p.name];
+  }
+  return makeState(b.id, props);
 }
 /** Applies one edit at (x,y,z), plus its mirror when mirroring is on. Returns true if anything changed. */
 function applyAt(x, y, z, tool) {
@@ -119,9 +134,7 @@ function applyAt(x, y, z, tool) {
     const { id, props } = parseState(s);
     if (!BMAP[id]) return false;
     ui.block = id;
-    if (props.facing) ui.facing = props.facing;
-    if (props.half) ui.half = props.half;
-    if (props.type) ui.slabType = props.type;
+    Object.assign(ui.props, placeDefaults(id), props);
     setTool("place");
     renderCurrent();
     renderPalette();
@@ -548,31 +561,60 @@ function showSwatch(sw, id, still = () => true) {
   if (now !== undefined) paint(now);
   else blockSwatch(id).then(paint);
 }
+/** Most blocks shown at once while filtering "All blocks". */
+const MAX_SHOWN = 300;
+/** Paints palette swatches once they scroll into view: only those blocks' files are read. */
+const swatchWatch = typeof IntersectionObserver === "function" ? new IntersectionObserver((es) => {
+  for (const e of es) if (e.isIntersecting) { swatchWatch.unobserve(e.target); showSwatch(e.target, e.target.dataset.id); }
+}, { rootMargin: "200px" }) : null;
+function paletteButton(b) {
+  const bt = document.createElement("button");
+  bt.dataset.id = b.id;
+  bt.setAttribute("aria-pressed", String(b.id === ui.block));
+  bt.title = b.id;
+  bt.innerHTML = `<span class="sw" style="background:${b.color};opacity:${b.opacity < 1 ? 0.7 : 1}"></span><span>${escapeHtml(b.name)}</span>`;
+  bt.firstChild.dataset.id = b.id;
+  if (swatchWatch) swatchWatch.observe(bt.firstChild);
+  else showSwatch(bt.firstChild, b.id);
+  return bt;
+}
 function renderPalette() {
-  const box = $("palette"), f = ui.filter.toLowerCase();
+  const box = $("palette"), f = ui.filter.toLowerCase().trim();
+  if (swatchWatch) swatchWatch.disconnect();
   box.innerHTML = "";
+  const match = (b) => !f || b.name.toLowerCase().includes(f) || b.id.includes(f);
   for (const g of [...new Set(BLOCKS.map((b) => b.group))]) {
-    const list = BLOCKS.filter((b) => b.group === g && (!f || b.name.toLowerCase().includes(f) || b.id.includes(f)));
+    const all = g === ALL_GROUP;
+    // While filtering, "All blocks" shows every match, including the hand-picked ones.
+    const list = BLOCKS.filter((b) => (all ? f || b.group === g : b.group === g) && match(b));
     if (!list.length) continue;
-    const sec = document.createElement("div");
+    const sec = document.createElement(all ? "details" : "div");
     sec.className = "pgroup";
-    sec.innerHTML = `<h3>${g}</h3>`;
+    if (all) {
+      sec.open = ui.allOpen || !!f;
+      sec.innerHTML = `<summary><h3>${f ? "All blocks matching" : "All blocks of Java " + escapeHtml(P.mcVersion)} (${list.length.toLocaleString()})</h3></summary>`;
+      sec.ontoggle = () => { if (!f) ui.allOpen = sec.open; };
+    } else sec.innerHTML = `<h3>${g}</h3>`;
     const gd = document.createElement("div");
     gd.className = "pgrid";
-    for (const b of list) {
-      const bt = document.createElement("button");
-      bt.setAttribute("aria-pressed", String(b.id === ui.block));
-      bt.title = b.id;
-      bt.innerHTML = `<span class="sw" style="background:${b.color};opacity:${b.opacity < 1 ? 0.7 : 1}"></span><span>${b.name}</span>`;
-      showSwatch(bt.firstChild, b.id);
-      bt.onclick = () => { ui.block = b.id; if (ui.tool !== "place") setTool("place"); renderPalette(); renderCurrent(); };
-      gd.appendChild(bt);
-    }
+    for (const b of list.slice(0, MAX_SHOWN)) gd.appendChild(paletteButton(b));
     sec.appendChild(gd);
+    if (list.length > MAX_SHOWN) sec.insertAdjacentHTML("beforeend", `<p class="lbl" style="margin:4px 0 0">…and ${(list.length - MAX_SHOWN).toLocaleString()} more. Type more of the name to narrow it down.</p>`);
     box.appendChild(sec);
   }
   if (!box.children.length) box.innerHTML = `<p class="lbl">No blocks match “${escapeHtml(ui.filter)}”.</p>`;
 }
+$("palette").onclick = (e) => {
+  const bt = e.target.closest("button[data-id]");
+  if (!bt) return;
+  ui.block = bt.dataset.id;
+  if (ui.tool !== "place") setTool("place");
+  $("palette").querySelectorAll("button[aria-pressed=true]").forEach((x) => x.setAttribute("aria-pressed", "false"));
+  bt.setAttribute("aria-pressed", "true");
+  renderCurrent();
+};
+/** Which way each direction points in the editor. */
+const DIR_HINT = { north: "north (−z)", south: "south (+z, street)", east: "east (+x)", west: "west (−x)", up: "up", down: "down" };
 function renderCurrent() {
   const b = BMAP[ui.block];
   $("curSw").style.background = b.color;
@@ -580,12 +622,18 @@ function renderCurrent() {
   showSwatch($("curSw"), b.id, () => ui.block === b.id);
   $("curName").textContent = b.name;
   $("curState").textContent = currentState();
-  $("stairOpts").hidden = b.shape !== "stairs";
-  $("slabOpts").hidden = b.shape !== "slab";
-  $("facing").value = ui.facing;
-  $("half").value = ui.half;
-  $("slabType").value = ui.slabType;
+  // One drop-down per property of the block.
+  const chosen = chosenProps(b.id);
+  $("propOpts").innerHTML = (BLOCK_PROPS[b.id] || []).filter((p) => !hiddenProp(b, p.name)).map((p) => `
+    <div class="fld"><label for="prop-${p.name}">${escapeHtml(p.name.replace(/_/g, " "))}</label>
+      <select id="prop-${p.name}" data-prop="${p.name}">${p.values.map((v) =>
+        `<option value="${v}"${v === chosen[p.name] ? " selected" : ""}>${escapeHtml(p.name === "facing" ? DIR_HINT[v] || v : v)}</option>`).join("")}</select></div>`).join("");
+  $("propOpts").hidden = !$("propOpts").children.length;
 }
+$("propOpts").onchange = (e) => {
+  const s = e.target.closest("select[data-prop]");
+  if (s) { ui.props[s.dataset.prop] = s.value; $("curState").textContent = currentState(); }
+};
 function setTool(t) {
   ui.tool = t;
   document.querySelectorAll("#tools button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
@@ -866,9 +914,6 @@ $("delVar").onclick = () => {
 
 document.querySelectorAll("#tools button").forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
 $("optMirror").onchange = (e) => { ui.mirror = e.target.checked; };
-$("facing").onchange = (e) => { ui.facing = e.target.value; renderCurrent(); };
-$("half").onchange = (e) => { ui.half = e.target.value; renderCurrent(); };
-$("slabType").onchange = (e) => { ui.slabType = e.target.value; renderCurrent(); };
 $("pSearch").addEventListener("input", (e) => { ui.filter = e.target.value; renderPalette(); });
 
 $("pickBase").onchange = (e) => { P.assembly.base = +e.target.value; save(); render3D(); };
@@ -1681,9 +1726,9 @@ document.addEventListener("keydown", (e) => {
   else if (k === "m") { ui.mirror = !ui.mirror; $("optMirror").checked = ui.mirror; toast("Mirror " + (ui.mirror ? "on" : "off")); }
   else if (k === "r") {
     const o = ["north", "east", "south", "west"];
-    ui.facing = o[(o.indexOf(ui.facing) + 1) % 4];
+    ui.props.facing = o[(o.indexOf(ui.props.facing) + 1) % 4];
     renderCurrent();
-    toast("Stairs face " + ui.facing);
+    toast("Facing " + ui.props.facing);
   }
 });
 
