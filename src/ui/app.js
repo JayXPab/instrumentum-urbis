@@ -22,7 +22,8 @@ import { roofDefaults, SLOPED } from "../core/roof.js";
 import { typeList, TYPE_NAMES } from "../core/corner.js";
 import { blockObject, clearGroup, addLines, boxEdges, textSprite } from "./meshes.js";
 import { isDesktop, chooseFolder, findModFolders, saveFile, loadFolders, saveFolders, findGameJars, extractAssets, chooseJar } from "./desktop.js";
-import { initTextures, reloadTextures, textureInfo, blockSwatch, swatchNow } from "./textures.js";
+import { initTextures, reloadTextures, textureInfo, blockSwatch, swatchNow, onTexturesChange, colourNow } from "./textures.js";
+import { connectPanes } from "../core/schem.js";
 
 /* ============================================================
    STATE
@@ -204,7 +205,11 @@ function render3D() {
   } else if (ui.mode === "edit") {
     const v = curVariant(), h = P.heights[ui.stage];
     $("viewtag").innerHTML = v ? `${STAGE_NAMES[ui.stage]} <small>${escapeHtml(v.name)}</small>` : STAGE_NAMES[ui.stage];
-    if (v) for (const [k, s] of Object.entries(v.blocks)) { const [x, y, z] = unK(k); world.add(blockObject(s, x, y, z)); }
+    // Panes are stored bare: show them joined up as they will be in game.
+    if (v) for (const [k, s] of connectPanes(new Map(Object.entries(v.blocks).map(([k, s]) => [k, { s }])))) {
+      const [x, y, z] = unK(k);
+      world.add(blockObject(s, x, y, z));
+    }
     // Stage bounds, Core Wall slab, mirror axis
     boxEdges(helpers, b.xMin - 0.5, 0, b.zMin - 0.5, b.xMax + 0.5, h, b.zMax + 0.5, muted, 0.45);
     boxEdges(helpers, b.xMin - 0.5, 0, -0.5, b.xMax + 0.5, h, 0.5, accent, 0.9);
@@ -233,10 +238,11 @@ function render3D() {
     const A = assemble(P);
     const lot = plot(P);
     $("viewtag").innerHTML = `${A.floors} floors <small>${lot.xMax - lot.xMin + 1} × ${A.top} × ${buildingDepth(P)}</small>`;
+    const joined = connectPanes(A.cells);
     for (const [k, c] of A.cells) {
       const [x, y, z] = unK(k);
       const faded = ui.fade && c.kind === "body" && c.copy > 0;
-      world.add(blockObject(c.s, x, y, z, faded ? 0.28 : 1));
+      world.add(blockObject(joined.get(k), x, y, z, faded ? 0.28 : 1));
     }
     if (ui.labels) {
       for (const s of A.segs) {
@@ -467,7 +473,7 @@ function renderGrid() {
       }
       const { id, props } = parseState(s);
       const bk = BMAP[id] || { color: "#d000d0", shape: "cube", opacity: 1 };
-      c.fillStyle = bk.color;
+      c.fillStyle = colourNow(id) || bk.color;
       c.globalAlpha = bk.opacity < 1 ? 0.65 : 1;
       if (bk.shape === "slab" && props.type !== "double") c.fillRect(X, props.type === "top" ? Y : Y + cell / 2, cell, cell / 2);
       else if (bk.shape === "stairs") {
@@ -813,6 +819,8 @@ $("coreBlock").onchange = (e) => { P.coreBlock = e.target.value; save(); };
 $("mcVersion").onchange = (e) => { P.mcVersion = e.target.value; save(); startTextures(); };
 
 /* ---------- Minecraft textures (desktop app) ---------- */
+// When more blocks can be drawn with their textures, draw them again.
+onTexturesChange(() => { render3D(); renderGrid(); });
 /** Versions we already looked for a game jar for by ourselves (once per launch each). */
 const autoTried = new Set();
 /** Checks this version's game files, then redraws what uses them. Without

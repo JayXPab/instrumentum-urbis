@@ -83,12 +83,15 @@ src/core/             the facade rules: NO DOM, NO three.js
   colour.js           colour variants: white slot blocks, main and base colours
   import.js           reading .schem/.litematic/.bp; turning blocks into variants
   models.js           Minecraft's blockstates/models: pick a model, follow parents,
-                      find textures (editor drawing only; the mod won't need it)
+                      find textures, turn models into faces (editor drawing only;
+                      the mod won't need it)
 src/ui/               everything that touches the screen
   app.js              editor state, 3D view, elevation grid, panels, undo
-  meshes.js           block-state -> three.js meshes, guide lines, labels
+  meshes.js           block-state -> three.js meshes (real models, or flat-colour
+                      boxes without game files), guide lines, labels
   desktop.js          desktop-only calls (folder picker, find/save files, game files); folder settings
-  textures.js         block textures from the copied game files: swatches, picture URLs, caches
+  textures.js         block textures from the copied game files: swatches, texture
+                      pictures, block faces, average colours, caches
 src-tauri/             desktop app shell (Rust): window, settings, later file access
   tauri.conf.json     app name, window size, which commands build the editor
   src/lib.rs          the Rust program; registers plugins and commands
@@ -328,7 +331,24 @@ moves to the top of whichever left panel is open. A marker shows the paste point
   are tinted is a table (`TINTS` in models.js): the game decides this in code,
   not in the jar's files.
 - Without copied files, or in the browser, blocks stay flat colours.
-- Not yet: the 3D view still uses flat colours (roadmap 10.4).
+- **3D view**: each block state is built once from its models
+  (`modelQuads`: elements, element rotation and rescale, face uv and rotation,
+  variant x/y turns, uvlock by projecting the turned face) into one shape
+  with a material per texture and tint, shared by every block of that state.
+  Faces are shaded like the game (top 1, north/south 0.8, east/west 0.6,
+  bottom 0.5; `shade: false` stays 1), unlit (`MeshBasicMaterial`). Textures
+  with fully clear pixels are cut out (leaves), partly clear ones blend
+  (stained glass). Blocks the game draws in code (chests, signs, banners,
+  beds, heads, water…) have no model shape: they stand in as a 14/16 box in
+  their particle texture. Until a state is built, or without game files, the
+  old flat-colour boxes are drawn; the view redraws as models arrive.
+- Panes are shown joined up (`connectPanes`) in the 3D view, as exported.
+  Fences and walls are not joined (they are stored and exported as placed).
+- The elevation grid uses each block's average texture colour when known.
+- Testing in a cloud session: Mojang's servers are blocked, but a copy of the
+  assets (InventivetalentDev/minecraft-assets on GitHub, branch per version)
+  can be cloned for local tests and served through a pretend
+  `__TAURI_INTERNALS__.invoke` in Playwright. Never commit those files.
 
 ## Project file
 
@@ -364,20 +384,24 @@ need a bump.
     2. ✅ Save to folders: a folder per format, Find game folders picks a
        whole profile across launchers, bulk export as loose files (checked on
        Windows with Modrinth).
-    3. 🔶 Game files: find the game jar across launchers, copy block
-       textures/models/blockstates out once, palette and current-block
-       swatches show real textures; grass and leaves in forest colours. Built and tested in the Linux app with a
-       pretend jar (awaiting a Windows check with the real 1.21.11 jar).
-    4. ⬜ Draw blocks with textures, then with their real models.
+    3. 🔶 Game files: find the game jar across launchers (by itself on
+       launch), copy block textures/models/blockstates out once, palette and
+       current-block swatches show real textures; grass and leaves in forest
+       colours. Every block of the version in the palette, with a drop-down
+       per property. Built and tested in a browser with the real 1.21.11
+       assets (awaiting a Windows check).
+    4. 🔶 3D view draws blocks with their real models and textures (awaiting
+       a Windows check). Later: join fences and walls, real chests/signs.
     5. ⬜ Windows installer and app icon.
 11. ⬜ In-game mod (Fabric).
 
 ## Known limits
 
-- Blocks are drawn as flat colours, not textures. Stair, pane and plant shapes are simplified.
-- Blocks outside the catalogue (doors, shelves, lanterns… e.g. from imports) are
-  kept and exported exactly, but the 3D view shows them as magenta placeholder
-  cubes. To be fixed with real models in the desktop app (see roadmap 10).
+- Without game files (browser, or none found) blocks are drawn as flat
+  colours with simplified stair, pane and plant shapes, and colours for blocks
+  outside the hand-picked groups are guessed from their names.
+- Blocks the game version doesn't have (e.g. from imports of a newer version)
+  are kept and exported exactly, but drawn as magenta placeholder cubes.
 - Cloud sessions can't download Mojang's files (blocked), so texture tests use
   a pretend jar with the same layout.
 - Testing the desktop app in a cloud session: `npx tauri build --debug --no-bundle`,
